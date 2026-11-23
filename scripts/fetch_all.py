@@ -788,6 +788,13 @@ def annotate_importance(countries: list[dict]) -> None:
     world_gdp = sum(v for v, _ in gdps)
     world_pop = sum(v for v, _ in pops)
     for c in countries:
+        econ = c["economy"]
+        econ["gdp_rank"] = gdp_rank.get(c["iso3"])
+        econ["world_gdp_share"] = (round(100 * econ["gdp_usd"] / world_gdp, 3)
+                                   if econ.get("gdp_usd") and world_gdp else None)
+        econ["world_pop_share"] = (round(100 * econ["population"] / world_pop, 3)
+                                   if econ.get("population") and world_pop else None)
+        econ["ranked_countries"] = len(gdp_rank)
         pol = c["politics"]
         for e in pol["elections"]:
             if "importance" not in e:  # an override may set it by hand

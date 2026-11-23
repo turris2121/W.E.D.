@@ -38,9 +38,23 @@ function renderMonth() {
   });
 }
 
+// Size of the economy: "$1.9T GDP · #12 largest economy in the world"
+function econLine(c) {
+  const e = c.economy;
+  if (e.gdp_usd == null) return "GDP not available";
+  return `$${compact.format(e.gdp_usd)} GDP · #${e.gdp_rank} largest economy in the world`;
+}
+
+// World influence bar: shares span 0.001%–27%, so use a log scale (1% ≈ half, 25%+ = full).
+function influenceWidth(share) {
+  if (!share) return 0;
+  return Math.max(2, Math.min(100, ((Math.log10(share) + 2) / (Math.log10(25) + 2)) * 100));
+}
+
 function chip(e) {
+  const share = shareText(e.country.economy.world_gdp_share);
   return `<button class="chip lv-${level(e.importance)}" data-iso="${esc(e.country.iso3)}" data-hl="${esc(e.country.iso3)}"
-    title="${esc(e.name)} · importance ${e.importance}%">
+    title="${esc(e.name)} · importance ${e.importance}% · world influence ${esc(share || "n/a")} · ${esc(econLine(e.country))}">
     <span class="flag">${esc(e.country.flag || "")}</span><span class="cn">${esc(e.country.name)}</span>
     <span class="pct">${e.importance}%</span></button>`;
 }
@@ -85,13 +99,19 @@ function renderMonthList(list, monthName) {
         <span class="mtitle">${esc(e.country.name)} <span class="muted">· ${esc(e.kind)}</span>
           <span class="badge ${esc(e.status)}">${esc(e.status)}</span></span>
         <span class="mnote">${esc(e.world_note || "")}</span>
+        <span class="mecon">${esc(econLine(e.country))}</span>
         ${e.also.length ? `<span class="muted">Same day: ${esc(e.also.join(", "))}</span>` : ""}
         ${e.winners && e.winners.length ? `<span class="muted">Winner: ${esc(e.winners.join(", "))}</span>` : ""}
       </span>
       <span class="imp" aria-label="Importance ${e.importance}%">
         <span class="imp-v">${e.importance}%</span>
         <span class="meter"><span class="fill lv-${level(e.importance)}" style="width:${e.importance}%"></span></span>
-        <span class="imp-l">importance</span>
+        <span class="imp-l">election importance</span>
+      </span>
+      <span class="imp" aria-label="World influence ${esc(shareText(e.country.economy.world_gdp_share) || "unknown")}">
+        <span class="imp-v">${esc(shareText(e.country.economy.world_gdp_share) || "—")}</span>
+        <span class="meter"><span class="fill world" style="width:${influenceWidth(e.country.economy.world_gdp_share)}%"></span></span>
+        <span class="imp-l">world influence (economy)</span>
       </span>
     </button>`).join("");
 }
@@ -128,7 +148,8 @@ async function renderMap(list) {
   const showTip = (ev, c, e) => {
     tip.innerHTML = `<strong>${esc(c.flag || "")} ${esc(c.name)}</strong>` + (e
       ? `<div>${esc(e.name)}</div><div class="muted">${e.date.length === 10 ? fmtDate(e.date) : "Date TBC"} · importance ${e.importance}%</div>`
-      : `<div class="muted">No national election this month</div>`);
+      : `<div class="muted">No national election this month</div>`) +
+      `<div class="muted">${esc(econLine(c))}<br>World influence: ${esc(shareText(c.economy.world_gdp_share) || "n/a")} of world GDP</div>`;
     tip.hidden = false;
     const x = Math.min(ev.clientX + 14, window.innerWidth - tip.offsetWidth - 8);
     tip.style.left = x + "px";

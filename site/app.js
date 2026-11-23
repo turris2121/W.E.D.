@@ -24,6 +24,9 @@ const fmtRate = (v) => {
   return v.toPrecision(3);
 };
 const fmtPct = (v) => (v == null ? na : v.toFixed(1) + "%");
+// Share of world GDP: more decimals for small economies so they don't all read "0.0%".
+const shareText = (v) => (v == null ? null : v >= 1 ? v.toFixed(1) + "%" : v >= 0.01 ? v.toFixed(2) + "%" : "<0.01%");
+const fmtShare = (v) => shareText(v) ?? na;
 
 function fmtDate(d) {
   if (!d) return na;
@@ -50,6 +53,7 @@ function sortValue(c, k) {
     case "population": return e.population;
     case "gdp": return e.gdp_usd;
     case "gdppc": return e.gdp_per_capita;
+    case "share": return e.world_gdp_share;
     case "currency": return mainCurrency(c)?.code;
     case "fx": return mainCurrency(c)?.per_usd;
     case "system": return c.politics.system_category;
@@ -209,6 +213,7 @@ function renderTable() {
       <td class="num">${fmtNum(e.population)}</td>
       <td class="num">${fmtUsd(e.gdp_usd)}</td>
       <td class="num">${fmtUsd(e.gdp_per_capita)}</td>
+      <td class="num">${fmtShare(e.world_gdp_share)}</td>
       <td>${cur ? esc(cur.code) : na}</td>
       <td class="num">${cur ? fmtRate(cur.per_usd) : na}</td>
       <td class="sys">${esc(c.politics.system_category)}</td>
@@ -241,6 +246,9 @@ function openDetail(iso3) {
   const econ = `<div class="card"><h3>Economy</h3>${dl([
     ["Population", fmtNum(e.population) + yr(e.population_year)],
     ["GDP", fmtUsd(e.gdp_usd) + yr(e.gdp_usd_year)],
+    ["Economy size", e.gdp_rank ? `#${e.gdp_rank} of ${e.ranked_countries} countries` : na],
+    ["World influence", fmtShare(e.world_gdp_share) + ' <span class="muted">of world GDP</span>'],
+    ["Share of world population", fmtShare(e.world_pop_share)],
     ["GDP per capita", fmtUsd(e.gdp_per_capita) + yr(e.gdp_per_capita_year)],
     ["GDP growth", fmtPct(e.gdp_growth) + yr(e.gdp_growth_year)],
     ["Inflation", fmtPct(e.inflation) + yr(e.inflation_year)],
