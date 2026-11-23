@@ -1,0 +1,18 @@
+# One row per combination of values; fetch_all.py collapses rows per country.
+SELECT ?country ?iso3 ?govLabel ?hosLabel ?hogLabel ?legLabel
+       ?hosOfficeLabel ?hogOfficeLabel ?hosApptLabel ?hogApptLabel ?hosTerm ?hogTerm WHERE {
+  ?country wdt:P31 wd:Q3624078 .                      # sovereign state
+  FILTER NOT EXISTS { ?country wdt:P576 [] }          # not dissolved
+  OPTIONAL { ?country wdt:P298 ?iso3 . }              # ISO 3166-1 alpha-3
+  OPTIONAL { ?country wdt:P122 ?gov . }               # basic form of government
+  OPTIONAL { ?country wdt:P35 ?hos . }                # head of state
+  OPTIONAL { ?country wdt:P6 ?hog . }                 # head of government
+  OPTIONAL { ?country wdt:P194 ?leg . }               # legislative body
+  OPTIONAL { ?country wdt:P1906 ?hosOffice .          # office held by head of state
+    OPTIONAL { ?hosOffice wdt:P748 ?hosAppt . }       #   appointed by
+    OPTIONAL { ?hosOffice wdt:P2097 ?hosTerm . } }    #   term length (years)
+  OPTIONAL { ?country wdt:P1313 ?hogOffice .          # office held by head of government
+    OPTIONAL { ?hogOffice wdt:P748 ?hogAppt . }
+    OPTIONAL { ?hogOffice wdt:P2097 ?hogTerm . } }
+  SERVICE wikibase:label { bd:serviceParam wikibase:language "en". }
+}

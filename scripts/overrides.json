@@ -1,0 +1,115 @@
+{
+  "_comment": "Hand corrections, keyed by ISO3. Anything here is deep-merged over fetched data and always wins. Keys starting with _ are ignored.",
+  "USA": {
+    "politics": {
+      "head_of_state": {
+        "selection": "Indirect: Electoral College, chosen by state-level popular vote"
+      },
+      "head_of_government": {
+        "selection": "Same person as head of state (President)"
+      }
+    }
+  },
+  "FRA": {
+    "politics": {
+      "head_of_state": {
+        "selection": "Direct popular vote, two-round system"
+      },
+      "head_of_government": {
+        "selection": "Appointed by the President; answerable to the National Assembly"
+      }
+    }
+  },
+  "GBR": {
+    "politics": {
+      "head_of_state": {
+        "selection": "Hereditary monarch"
+      },
+      "head_of_government": {
+        "selection": "Leader who commands a majority in the House of Commons, appointed by the monarch"
+      }
+    }
+  },
+  "DEU": {
+    "politics": {
+      "head_of_state": {
+        "selection": "Elected by the Federal Convention (Bundestag members + state delegates)"
+      },
+      "head_of_government": {
+        "selection": "Elected by the Bundestag on the President's proposal"
+      }
+    }
+  },
+  "IND": {
+    "politics": {
+      "head_of_state": {
+        "selection": "Elected by an electoral college of national and state legislators"
+      },
+      "head_of_government": {
+        "selection": "Appointed by the President; must command a Lok Sabha majority"
+      }
+    }
+  },
+  "BRA": {
+    "politics": {
+      "head_of_state": {
+        "selection": "Direct popular vote, two-round system"
+      },
+      "head_of_government": {
+        "selection": "Same person as head of state (President)"
+      }
+    }
+  },
+  "MEX": {
+    "politics": {
+      "head_of_state": {
+        "selection": "Direct popular vote, single round (plurality)",
+        "term_years": 6
+      },
+      "head_of_government": {
+        "selection": "Same person as head of state (President)"
+      }
+    }
+  },
+  "ESP": {
+    "politics": {
+      "head_of_state": {
+        "selection": "Hereditary monarch"
+      },
+      "head_of_government": {
+        "selection": "Invested by the Congress of Deputies, appointed by the monarch"
+      }
+    }
+  },
+  "JPN": {
+    "politics": {
+      "head_of_state": {
+        "selection": "Hereditary monarch (ceremonial)"
+      },
+      "head_of_government": {
+        "selection": "Designated by the National Diet, appointed by the Emperor"
+      }
+    }
+  },
+  "CHN": {
+    "politics": {
+      "head_of_state": {
+        "selection": "Elected by the National People's Congress"
+      },
+      "head_of_government": {
+        "selection": "Nominated by the President, approved by the National People's Congress"
+      },
+      "system_category": "One-party state"
+    }
+  },
+  "CUB": {
+    "politics": {
+      "system_category": "One-party state"
+    }
+  },
+  "ERI": {
+    "politics": {
+      "system_category": "One-party state"
+    }
+  }
+}

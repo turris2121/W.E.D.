@@ -1,0 +1,13 @@
+# National-level elections (jurisdiction = a sovereign state) in a date window.
+# {START} / {END} are filled in by fetch_all.py. The {WINNER_*} markers are
+# removed when the query is retried without winners (it is the slowest part).
+SELECT ?e ?eLabel ?d ?prec ?c ?tLabel ?wLabel WHERE {
+  ?e p:P585/psv:P585 [ wikibase:timeValue ?d ; wikibase:timePrecision ?prec ] .
+  FILTER(?d >= "{START}T00:00:00Z"^^xsd:dateTime && ?d < "{END}T00:00:00Z"^^xsd:dateTime)
+  ?e wdt:P31/wdt:P279* wd:Q40231 .                    # any kind of public election
+  ?e wdt:P1001 ?c .                                   # applies to jurisdiction
+  ?c wdt:P31 wd:Q3624078 .                            # ... which is a sovereign state
+  OPTIONAL { ?e wdt:P31 ?t . }
+  {WINNER_START}OPTIONAL { ?e wdt:P1346 ?w . }{WINNER_END}   # winner
+  SERVICE wikibase:label { bd:serviceParam wikibase:language "en". }
+}

@@ -1,0 +1,47 @@
+{
+  "generated_at": "2026-11-23T18:23:19+00:00",
+  "count": 196,
+  "sources": {
+    "countries": {
+      "url": "https://www.wikidata.org + https://data.worldbank.org",
+      "status": "cached",
+      "fetched_at": "2026-11-23T18:22:03+00:00"
+    },
+    "worldbank": {
+      "url": "https://data.worldbank.org",
+      "status": "cached",
+      "fetched_at": "2026-11-23T18:18:05+00:00"
+    },
+    "fx": {
+      "url": "https://www.exchangerate-api.com (open.er-api.com)",
+      "status": "cached",
+      "fetched_at": "2026-11-23T18:18:05+00:00"
+    },
+    "politics": {
+      "url": "https://www.wikidata.org",
+      "status": "cached",
+      "fetched_at": "2026-11-23T18:18:05+00:00"
+    },
+    "elections": {
+      "url": "https://www.wikidata.org",
+      "status": "cached",
+      "fetched_at": "2026-11-23T18:18:05+00:00"
+    },
+    "ipu": {
+      "url": "https://data.ipu.org",
+      "status": "cached",
+      "fetched_at": "2026-11-23T18:18:05+00:00"
+    }
+  },
+  "coverage_percent": {
+    "population": 98.5,
+    "gdp_usd": 98.0,
+    "fx_rate": 99.5,
+    "system": 81.1,
+    "head_of_state": 99.5,
+    "head_of_government": 96.9,
+    "chambers_with_seats": 98.0,
+    "any_election": 74.0,
+    "next_election_known": 94.4
+  }
+}
