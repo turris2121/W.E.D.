@@ -119,6 +119,8 @@ def fetch_countries():
             continue
         c = out.setdefault(iso3, {"qid": cq, "iso2": r.get("iso2"), "name": r.get("countryLabel"),
                                   "capital": None, "continents": [], "currencies": []})
+        if r.get("num") and not c.get("iso_num"):
+            c["iso_num"] = r["num"].zfill(3)
         cap, cont = r.get("capitalLabel"), r.get("continentLabel")
         if cap and not is_qid_label(cap) and not c["capital"]:
             c["capital"] = cap
@@ -137,6 +139,9 @@ def fetch_countries():
         if region and region != "Aggregates":
             c["region"] = region
         c["income_level"] = (w.get("incomeLevel") or {}).get("value", "").strip() or None
+        lat, lon = as_float(w.get("latitude")), as_float(w.get("longitude"))
+        if lat is not None and lon is not None:
+            c["lat"], c["lon"] = lat, lon
         if not c["capital"] and w.get("capitalCity"):
             c["capital"] = w["capitalCity"]
         if not c.get("iso2") and w.get("iso2Code"):
@@ -463,7 +468,7 @@ def fmt_date(iso: str | None, precision: int) -> str | None:
 
 SKIP_ELECTION = re.compile(r"municipal|local|gubernatorial|state election|primary|leadership|"
                            r"by-election|regent|mayor|regional|provincial|mock|show election|"
-                           r"county|city council|cantonal|party", re.I)
+                           r"county|city council|cantonal|party|m[aä]slihat", re.I)
 
 
 def election_kind(label: str, types: list[str]) -> str:
@@ -477,6 +482,8 @@ def election_kind(label: str, types: list[str]) -> str:
     if any(k in s for k in ("parliament", "legislative", "general", "federal", "national assembly",
                             "senate", "house of", "congress", "duma", "majlis", "assembly")):
         return "Legislative / general"
+    if re.search(r"^\d{4} .+ elections$", label.strip()):
+        return "Legislative / general"  # e.g. "2026 United States elections" (midterms)
     return "Other"
 
 
@@ -563,6 +570,7 @@ def merge(src: dict) -> list[dict]:
             "date_precision": {11: "day", 10: "month"}.get(e.get("precision"), "year"),
             "status": election_status(e["types"], date),
             "winners": e.get("winners") or [],
+            "snap": any("snap" in t.lower() for t in e["types"]),
             "wikidata": f"https://www.wikidata.org/wiki/{e['qid']}",
         })
 
@@ -620,6 +628,9 @@ def merge(src: dict) -> list[dict]:
         rec = {
             "iso3": iso3,
             "iso2": base.get("iso2"),
+            "iso_num": base.get("iso_num"),
+            "lat": base.get("lat"),
+            "lon": base.get("lon"),
             "name": base.get("name") or iso3,
             "flag": base.get("flag"),
             "region": base.get("region"),
@@ -665,7 +676,125 @@ def merge(src: dict) -> list[dict]:
         if iso3 in overrides:
             deep_merge(rec, overrides[iso3])
         countries.append(rec)
+    annotate_importance(countries)
     return countries
+
+
+# --------------------------------------------------------------------------- #
+# Election importance (formula) and world-perspective sentence (template)
+# --------------------------------------------------------------------------- #
+# How much each kind of election decides who really holds power, by system type.
+# Values are 0-100: "how decisive is this vote for who governs the country".
+POWER_SCORE = {
+    #  system category              presidential  legislative  referendum
+    "Presidential republic":        (92,          62,          55),
+    "Semi-presidential":            (88,          72,          55),
+    "Parliamentary republic":       (35,          92,          60),
+    "Constitutional monarchy":      (0,           92,          60),
+    "Semi-constitutional monarchy": (0,           45,          40),
+    "Absolute monarchy":            (0,           20,          30),
+    "Theocracy":                    (55,          40,          35),
+    "One-party state":              (20,          22,          25),
+    "Military / transitional":      (88,          80,          75),
+    "Other / unknown":              (60,          60,          50),
+}
+
+WHAT_DECIDED = {
+    ("Presidential", True): "voters choose the president, who also runs the government",
+    ("Presidential", False): "voters choose the head of state",
+    ("Legislative / general", True): "voters elect the legislature that checks the president",
+    ("Legislative / general", False): "the vote decides which party or coalition forms the government",
+    ("Referendum", True): "voters decide a question directly",
+    ("Referendum", False): "voters decide a question directly",
+}
+
+
+def election_importance(kind: str, name: str, category: str, same_person: bool, snap: bool) -> int:
+    pres, leg, ref = POWER_SCORE.get(category, POWER_SCORE["Other / unknown"])
+    n = name.lower()
+    if kind == "Presidential":
+        score = pres or 30
+    elif kind == "Legislative / general":
+        score = leg
+        # A "general election" in a presidential system usually elects the president too.
+        if "general" in n and category in ("Presidential republic", "Semi-presidential"):
+            score = max(score, pres)
+    elif kind == "Referendum":
+        score = ref
+    elif kind == "European Parliament":
+        score = 35
+    else:
+        score = 45
+    if snap:
+        score += 5  # snap elections usually follow a political crisis
+    return max(5, min(99, int(score)))
+
+
+def ordinal(n: int) -> str:
+    return f"{n}{'th' if 10 <= n % 100 <= 20 else {1: 'st', 2: 'nd', 3: 'rd'}.get(n % 10, 'th')}"
+
+
+def world_note(c: dict, e: dict, gdp_rank: dict, pop_rank: dict, world_gdp: float, world_pop: float) -> str:
+    econ = c["economy"]
+    pol = c["politics"]
+    cat = pol["system_category"]
+    presidential = cat in ("Presidential republic", "Semi-presidential", "Military / transitional")
+    kind = e["kind"]
+    if kind == "Presidential" and not presidential and cat != "Theocracy":
+        what = "voters (or parliament) choose a largely ceremonial president"
+    elif cat == "Semi-constitutional monarchy" and kind != "Referendum":
+        what = "the elected parliament shares power with a monarch who appoints the government"
+    elif cat in ("One-party state", "Absolute monarchy"):
+        what = "the vote happens under tightly controlled politics, so it signals stability more than change"
+    else:
+        what = WHAT_DECIDED.get((kind, presidential if kind != "Presidential" else pol["same_person"]),
+                                "the vote shapes national politics")
+    if e.get("snap"):
+        what = "an early (snap) vote after political turmoil: " + what
+
+    gdp, pop = econ.get("gdp_usd"), econ.get("population")
+    g_rank, p_rank = gdp_rank.get(c["iso3"]), pop_rank.get(c["iso3"])
+    g_share = 100 * gdp / world_gdp if gdp and world_gdp else None
+    p_share = 100 * pop / world_pop if pop and world_pop else None
+    region = c.get("region") or "its region"
+
+    if g_rank and g_rank <= 10:
+        nth = "" if g_rank == 1 else ordinal(g_rank) + "-"
+        weight = (f"as the world's {nth}largest economy ({g_share:.1f}% of global GDP), "
+                  f"the result can move markets, trade and alliances worldwide")
+    elif g_rank and g_rank <= 25:
+        weight = (f"it is a top-25 economy ({ordinal(g_rank)}, {g_share:.1f}% of global GDP), "
+                  f"so investors and partners in {region} watch it closely")
+    elif p_rank and p_rank <= 20:
+        weight = (f"with {p_share:.1f}% of the world's population ({ordinal(p_rank)} most populous), "
+                  f"its direction matters for {region} and global development")
+    elif cat in ("Military / transitional",):
+        weight = "a return to elected government would matter for regional security"
+    elif g_share is not None:
+        share = f"{g_share:.2f}%" if g_share >= 0.01 else "under 0.01%"
+        weight = (f"its economy is small on a global scale ({share} of world GDP), "
+                  f"so the impact is mainly within {region}")
+    else:
+        weight = f"the impact is mainly within {region}"
+    s = f"{c['name']}: {what}; {weight}."
+    return s[:1].upper() + s[1:]
+
+
+def annotate_importance(countries: list[dict]) -> None:
+    gdps = sorted(((c["economy"]["gdp_usd"] or 0, c["iso3"]) for c in countries), reverse=True)
+    pops = sorted(((c["economy"]["population"] or 0, c["iso3"]) for c in countries), reverse=True)
+    gdp_rank = {iso: i + 1 for i, (v, iso) in enumerate(gdps) if v}
+    pop_rank = {iso: i + 1 for i, (v, iso) in enumerate(pops) if v}
+    world_gdp = sum(v for v, _ in gdps)
+    world_pop = sum(v for v, _ in pops)
+    for c in countries:
+        pol = c["politics"]
+        for e in pol["elections"]:
+            if "importance" not in e:  # an override may set it by hand
+                e["importance"] = election_importance(e["kind"], e["name"], pol["system_category"],
+                                                      pol["same_person"], e.get("snap", False))
+            if "world_note" not in e:
+                e["world_note"] = world_note(c, e, gdp_rank, pop_rank, world_gdp, world_pop)
 
 
 def coverage(countries: list[dict]) -> dict:

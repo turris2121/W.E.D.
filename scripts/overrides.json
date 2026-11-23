@@ -111,5 +111,35 @@
     "politics": {
       "system_category": "One-party state"
     }
+  },
+  "BHR": {
+    "politics": {
+      "system_category": "Semi-constitutional monarchy"
+    }
+  },
+  "KWT": {
+    "politics": {
+      "system_category": "Semi-constitutional monarchy"
+    }
+  },
+  "JOR": {
+    "politics": {
+      "system_category": "Semi-constitutional monarchy"
+    }
+  },
+  "MAR": {
+    "politics": {
+      "system_category": "Semi-constitutional monarchy"
+    }
+  },
+  "QAT": {
+    "politics": {
+      "system_category": "Semi-constitutional monarchy"
+    }
+  },
+  "LIE": {
+    "politics": {
+      "system_category": "Semi-constitutional monarchy"
+    }
   }
 }

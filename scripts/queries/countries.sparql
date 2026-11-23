@@ -1,9 +1,10 @@
 # Basic facts for every current sovereign state.
-SELECT ?country ?iso3 ?iso2 ?countryLabel ?capitalLabel ?curCode ?curLabel ?continentLabel WHERE {
+SELECT ?country ?iso3 ?iso2 ?num ?countryLabel ?capitalLabel ?curCode ?curLabel ?continentLabel WHERE {
   ?country wdt:P31 wd:Q3624078 .
   FILTER NOT EXISTS { ?country wdt:P576 [] }
   OPTIONAL { ?country wdt:P298 ?iso3 . }
   OPTIONAL { ?country wdt:P297 ?iso2 . }
+  OPTIONAL { ?country wdt:P299 ?num . }               # ISO 3166-1 numeric (map ids)
   OPTIONAL { ?country wdt:P36 ?capital . }
   OPTIONAL { ?country wdt:P38 ?cur . ?cur wdt:P498 ?curCode . }
   OPTIONAL { ?country wdt:P30 ?continent . }

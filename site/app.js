@@ -78,6 +78,7 @@ async function load() {
   renderTable();
   renderFooter();
   openFromHash();
+  if (typeof renderMonth === "function") renderMonth();
 }
 
 function renderHeader() {
