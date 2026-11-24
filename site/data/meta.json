@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-11-23T21:36:56+00:00",
+  "generated_at": "2026-11-24T06:53:50+00:00",
   "count": 196,
   "sources": {
     "countries": {
@@ -14,8 +14,8 @@
     },
     "fx": {
       "url": "https://www.exchangerate-api.com (open.er-api.com)",
-      "status": "cached",
-      "fetched_at": "2026-11-23T18:18:05+00:00"
+      "status": "ok",
+      "fetched_at": "2026-11-24T06:53:50+00:00"
     },
     "politics": {
       "url": "https://www.wikidata.org",
