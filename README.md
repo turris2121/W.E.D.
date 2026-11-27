@@ -16,6 +16,7 @@ Every day at 06:00 UTC a GitHub Action runs `scripts/fetch_all.py`, commits the 
 | [open.er-api.com](https://www.exchangerate-api.com/docs/free) | USD exchange rates | every 12 h |
 | [Wikidata SPARQL](https://query.wikidata.org) | government form, leaders, how offices are filled, elections | daily |
 | [IPU Parline](https://data.ipu.org) | chambers, seats, electoral system, term, last election | weekly |
+| [BIS](https://data.bis.org) | central bank policy rates, CPI inflation, exchange rates (13 central banks) | daily |
 
 If a source fails, the previous copy in `data/raw/` is used and the page shows a warning.
 

@@ -19,6 +19,8 @@ from pathlib import Path
 
 import requests
 
+import monetary  # scripts/monetary.py (central banks, IS-LM rules)
+
 ROOT = Path(__file__).resolve().parent.parent
 RAW = ROOT / "data" / "raw"
 OUT = ROOT / "site" / "data"
@@ -36,6 +38,7 @@ MAX_AGE_HOURS = {
     "politics": 24,
     "elections": 24,
     "ipu": 24 * 7,
+    "bis": 24,
 }
 
 SOURCE_URLS = {
@@ -45,6 +48,7 @@ SOURCE_URLS = {
     "politics": "https://www.wikidata.org",
     "elections": "https://www.wikidata.org",
     "ipu": "https://data.ipu.org",
+    "bis": "https://data.bis.org",
 }
 
 # Wikidata items that have no ISO3 code (P298) but should be matched.
@@ -322,6 +326,7 @@ FETCHERS = {
     "politics": fetch_politics,
     "elections": fetch_elections,
     "ipu": fetch_ipu,
+    "bis": lambda: monetary.fetch_bis(SESSION),
 }
 
 
@@ -844,6 +849,12 @@ def main() -> int:
     meta = {"generated_at": NOW.isoformat(timespec="seconds"), "count": len(countries),
             "sources": status, "coverage_percent": cov}
     (OUT / "meta.json").write_text(json.dumps(meta, ensure_ascii=False, indent=2))
+
+    if src.get("bis"):
+        banks = monetary.build_central_banks(src["bis"], countries)
+        (OUT / "central_banks.json").write_text(json.dumps(banks, ensure_ascii=False, separators=(",", ":")))
+        missing = [b["short"] for b in banks if b["rate"] is None or b["cpi"] is None]
+        log(f"Wrote {len(banks)} central banks" + (f" (missing data: {', '.join(missing)})" if missing else ""))
 
     log(f"\nWrote {len(countries)} countries to {OUT / 'countries.json'}")
     log("Coverage (% of countries with field):")

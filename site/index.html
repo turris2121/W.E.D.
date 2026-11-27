@@ -11,84 +11,141 @@
   <header class="top">
     <div>
       <h1>World Politics Dashboard</h1>
-      <p class="sub">Political systems, elections and economic data for every country. Refreshed daily from open data.</p>
+      <p class="sub">Elections, political systems, economies and central banks. Refreshed daily from open data.</p>
     </div>
     <div class="updated" id="updated">Loading…</div>
   </header>
 
-  <section class="month-grid" aria-label="This month">
-    <section class="panel cal-panel">
-      <div class="panel-head">
-        <h2 id="cal-title">Elections this month</h2>
-        <span class="muted">Importance = how much the vote decides who governs</span>
-      </div>
-      <div class="cal" id="cal" role="grid"></div>
-      <div id="cal-unfixed"></div>
+  <nav class="tabs" role="tablist" aria-label="Dashboard sections">
+    <button role="tab" id="tab-elections" aria-controls="pane-elections" data-tab="elections" aria-selected="true">Elections</button>
+    <button role="tab" id="tab-countries" aria-controls="pane-countries" data-tab="countries" aria-selected="false">Countries</button>
+    <button role="tab" id="tab-banks" aria-controls="pane-banks" data-tab="banks" aria-selected="false">Central banks</button>
+  </nav>
+
+  <!-- ===================== Elections ===================== -->
+  <div class="pane" id="pane-elections" role="tabpanel" aria-labelledby="tab-elections">
+    <section class="month-grid" aria-label="This month">
+      <section class="panel cal-panel">
+        <div class="panel-head">
+          <h2 id="cal-title">Elections this month</h2>
+          <span class="muted">Importance = how much the vote decides who governs</span>
+        </div>
+        <div class="cal" id="cal" role="grid"></div>
+        <div id="cal-unfixed"></div>
+      </section>
+
+      <section class="panel map-panel">
+        <div class="panel-head">
+          <h2>Where the votes are</h2>
+          <div class="legend" id="map-legend"></div>
+        </div>
+        <div class="map-wrap" id="map"><div class="empty">Loading map…</div></div>
+      </section>
     </section>
 
-    <section class="panel map-panel">
+    <section class="panel">
       <div class="panel-head">
-        <h2>Where the votes are</h2>
-        <div class="legend" id="map-legend"></div>
+        <h2>This month's elections: why they matter</h2>
+        <span class="muted" id="month-count"></span>
       </div>
-      <div class="map-wrap" id="map"><div class="empty">Loading map…</div></div>
+      <div id="month-list" class="month-list"></div>
     </section>
-  </section>
 
-  <section class="panel">
-    <div class="panel-head">
-      <h2>This month's elections: why they matter</h2>
-      <span class="muted" id="month-count"></span>
-    </div>
-    <div id="month-list" class="month-list"></div>
-  </section>
+    <section class="panel">
+      <div class="panel-head">
+        <h2>Upcoming elections</h2>
+        <div class="seg" role="tablist" aria-label="Time window">
+          <button data-days="90" class="on">90 days</button>
+          <button data-days="365">12 months</button>
+          <button data-days="1825">5 years</button>
+        </div>
+      </div>
+      <div class="legend" id="kind-legend"></div>
+      <div id="upcoming" class="timeline"></div>
+    </section>
+  </div>
+
+  <!-- ===================== Countries ===================== -->
+  <div class="pane" id="pane-countries" role="tabpanel" aria-labelledby="tab-countries" hidden>
+    <section class="kpis" id="kpis" aria-label="Summary"></section>
+
+    <section class="panel">
+      <div class="panel-head">
+        <h2>Countries</h2>
+        <span class="muted" id="row-count"></span>
+      </div>
+      <div class="filters">
+        <input id="q" type="search" placeholder="Search country, capital, leader…" aria-label="Search">
+        <select id="region" aria-label="Region"><option value="">All regions</option></select>
+        <select id="system" aria-label="System"><option value="">All systems</option></select>
+      </div>
+      <div class="table-scroll">
+        <table id="tbl">
+          <thead><tr>
+            <th data-k="name">Country</th>
+            <th data-k="population" class="num">Population</th>
+            <th data-k="gdp" class="num">GDP (US$)</th>
+            <th data-k="gdppc" class="num">GDP / capita</th>
+            <th data-k="share" class="num">World influence</th>
+            <th data-k="currency">Currency</th>
+            <th data-k="fx" class="num">per 1 USD</th>
+            <th data-k="system">System</th>
+            <th data-k="seats" class="num">Legislature seats</th>
+            <th data-k="next">Next election</th>
+          </tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </section>
+  </div>
+
+  <!-- ===================== Central banks ===================== -->
+  <div class="pane" id="pane-banks" role="tabpanel" aria-labelledby="tab-banks" hidden>
+    <section class="panel">
+      <div class="panel-head">
+        <h2>Central banks of the largest economies</h2>
+        <span class="muted" id="banks-asof"></span>
+      </div>
+      <p class="muted intro">Together these 13 banks set money conditions for about <strong id="banks-share">—</strong> of world GDP.
+        Click a bank to see how its policy shifts the IS-LM model, its currency and inflation.</p>
+      <div class="bank-cards" id="bank-cards"></div>
+    </section>
+
+    <section class="panel" id="bank-detail" aria-live="polite"></section>
+
+    <section class="panel">
+      <div class="panel-head"><h2>Compare all banks</h2></div>
+      <div class="table-scroll">
+        <table id="bank-tbl">
+          <thead><tr>
+            <th data-k="short">Bank</th>
+            <th data-k="world_gdp_share" class="num">World GDP</th>
+            <th data-k="rate" class="num">Policy rate</th>
+            <th data-k="rate_change_12m" class="num">12-mo change</th>
+            <th data-k="cpi" class="num">Inflation</th>
+            <th data-k="target" class="num">Target</th>
+            <th data-k="real_rate" class="num">Real rate</th>
+            <th data-k="position">Policy is</th>
+            <th data-k="currency_strength_12m" class="num">Currency vs USD (12 mo)</th>
+            <th data-k="outlook">Inflation outlook</th>
+          </tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </section>
+
+    <section class="panel about">
+      <h2>About this model</h2>
+      <p><strong>IS-LM</strong> shows the interest rate (r) and output (Y) where the goods market (IS: spending falls as r rises) and the money market (LM: set by the central bank) are both in balance.
+        When a bank <em>raises</em> rates, LM shifts up/left, so r rises and Y falls. When it <em>cuts</em>, LM shifts down/right.
+        In an open economy (Mundell-Fleming), a higher rate than abroad attracts capital and tends to strengthen the currency, which lowers import prices and inflation.</p>
+      <p class="muted">Rules used here: stance = 12-month change in the policy rate (±0.25 pp). Policy is restrictive when the real rate (policy rate − CPI inflation) is more than 0.5 pp above an assumed neutral real rate, and accommodative when it is more than 0.5 pp below.
+        Inflation outlook combines the real-rate position, the stance and a ≥3% currency move. These are rule-based estimates, not forecasts: fiscal policy, energy prices and other supply shocks are not modelled.
+        Data: <a href="https://data.bis.org" target="_blank" rel="noopener">Bank for International Settlements</a> (policy rates, CPI, exchange rates).</p>
+    </section>
+  </div>
 
   <div class="tip" id="tip" hidden></div>
-
-  <section class="kpis" id="kpis" aria-label="Summary"></section>
-
-  <section class="panel">
-    <div class="panel-head">
-      <h2>Upcoming elections</h2>
-      <div class="seg" role="tablist" aria-label="Time window">
-        <button data-days="90" class="on">90 days</button>
-        <button data-days="365">12 months</button>
-        <button data-days="1825">5 years</button>
-      </div>
-    </div>
-    <div class="legend" id="kind-legend"></div>
-    <div id="upcoming" class="timeline"></div>
-  </section>
-
-  <section class="panel">
-    <div class="panel-head">
-      <h2>Countries</h2>
-      <span class="muted" id="row-count"></span>
-    </div>
-    <div class="filters">
-      <input id="q" type="search" placeholder="Search country, capital, leader…" aria-label="Search">
-      <select id="region" aria-label="Region"><option value="">All regions</option></select>
-      <select id="system" aria-label="System"><option value="">All systems</option></select>
-    </div>
-    <div class="table-scroll">
-      <table id="tbl">
-        <thead><tr>
-          <th data-k="name">Country</th>
-          <th data-k="population" class="num">Population</th>
-          <th data-k="gdp" class="num">GDP (US$)</th>
-          <th data-k="gdppc" class="num">GDP / capita</th>
-          <th data-k="share" class="num">World influence</th>
-          <th data-k="currency">Currency</th>
-          <th data-k="fx" class="num">per 1 USD</th>
-          <th data-k="system">System</th>
-          <th data-k="seats" class="num">Legislature seats</th>
-          <th data-k="next">Next election</th>
-        </tr></thead>
-        <tbody></tbody>
-      </table>
-    </div>
-  </section>
-
   <footer class="foot" id="foot"></footer>
 </div>
 
@@ -103,5 +160,6 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/topojson/3.0.2/topojson.min.js"></script>
 <script src="app.js"></script>
 <script src="month.js"></script>
+<script src="banks.js"></script>
 </body>
 </html>

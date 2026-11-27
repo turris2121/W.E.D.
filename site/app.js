@@ -81,8 +81,10 @@ async function load() {
   renderUpcoming();
   renderTable();
   renderFooter();
+  if (typeof initTabs === "function") initTabs();
   openFromHash();
   if (typeof renderMonth === "function") renderMonth();
+  if (typeof initBanks === "function") initBanks();
 }
 
 function renderHeader() {
@@ -173,7 +175,9 @@ function initFilters() {
   });
   $("#d-close").addEventListener("click", () => $("#detail").close());
   $("#detail").addEventListener("click", (ev) => { if (ev.target.id === "detail") $("#detail").close(); });
-  $("#detail").addEventListener("close", () => history.replaceState(null, "", location.pathname));
+  // On close, go back to the active tab's address (e.g. #banks) instead of the country code.
+  $("#detail").addEventListener("close", () =>
+    history.replaceState(null, "", typeof tabHash === "function" ? tabHash() : location.pathname));
 }
 
 function filtered() {
@@ -303,6 +307,7 @@ function openDetail(iso3) {
       ${p.same_person ? "" : personCard("Head of government", p.head_of_government)}
       ${chambers}${elections}
     </div>
+    ${typeof bankLinkFor === "function" ? bankLinkFor(c.iso3) : ""}
     ${c.wikidata ? `<p class="muted" style="margin-top:12px">Political data: <a href="${esc(c.wikidata)}" target="_blank" rel="noopener">Wikidata</a>. Spot an error? Add a correction in <code>scripts/overrides.json</code>.</p>` : ""}`;
   history.replaceState(null, "", "#" + c.iso3);
   const d = $("#detail");
@@ -311,8 +316,8 @@ function openDetail(iso3) {
 }
 
 function openFromHash() {
-  const iso = location.hash.slice(1).toUpperCase();
-  if (iso) openDetail(iso);
+  const iso = location.hash.slice(1);
+  if (/^[A-Z]{3}$/.test(iso)) openDetail(iso); // tab hashes (#banks, #banks/JP) are lowercase
 }
 
 function renderFooter() {

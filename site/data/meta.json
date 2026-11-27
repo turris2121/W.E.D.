@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-11-27T06:57:38+00:00",
+  "generated_at": "2026-11-27T19:39:33+00:00",
   "count": 196,
   "sources": {
     "countries": {
@@ -9,28 +9,33 @@
     },
     "worldbank": {
       "url": "https://data.worldbank.org",
-      "status": "ok",
+      "status": "cached",
       "fetched_at": "2026-11-27T06:57:38+00:00"
     },
     "fx": {
       "url": "https://www.exchangerate-api.com (open.er-api.com)",
-      "status": "ok",
-      "fetched_at": "2026-11-27T06:57:38+00:00"
+      "status": "cached",
+      "fetched_at": "2026-11-27T19:33:39+00:00"
     },
     "politics": {
       "url": "https://www.wikidata.org",
-      "status": "ok",
+      "status": "cached",
       "fetched_at": "2026-11-27T06:57:38+00:00"
     },
     "elections": {
       "url": "https://www.wikidata.org",
-      "status": "ok",
+      "status": "cached",
       "fetched_at": "2026-11-27T06:57:38+00:00"
     },
     "ipu": {
       "url": "https://data.ipu.org",
       "status": "cached",
       "fetched_at": "2026-11-23T18:18:05+00:00"
+    },
+    "bis": {
+      "url": "https://data.bis.org",
+      "status": "cached",
+      "fetched_at": "2026-11-27T19:33:39+00:00"
     }
   },
   "coverage_percent": {
