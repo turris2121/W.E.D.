@@ -20,6 +20,7 @@ import csv
 import datetime as dt
 import io
 import math
+import os
 import time
 
 # --------------------------------------------------------------------------- #
@@ -32,7 +33,12 @@ EU27 = {"AUT", "BEL", "BGR", "HRV", "CYP", "CZE", "DNK", "EST", "FIN", "FRA", "D
         "HUN", "IRL", "ITA", "LVA", "LTU", "LUX", "MLT", "NLD", "POL", "PRT", "ROU", "SVK",
         "SVN", "ESP", "SWE"}
 
-CT = "https://comtradeapi.un.org/public/v1/preview/C/{freq}/HS"
+# With a free Comtrade API key (env COMTRADE_KEY) we use the full data API: 100k rows per call.
+# Without one, the keyless preview: 500 rows per call and a small, IP-based quota.
+COMTRADE_KEY = os.environ.get("COMTRADE_KEY", "").strip()
+CT = ("https://comtradeapi.un.org/data/v1/get/C/{freq}/HS" if COMTRADE_KEY
+      else "https://comtradeapi.un.org/public/v1/preview/C/{freq}/HS")
+CT_MAX_ROWS = 100_000 if COMTRADE_KEY else 500
 CT_REF = "https://comtradeapi.un.org/files/v1/app/reference/{name}.json"
 WB = "https://api.worldbank.org/v2/country/{iso}/indicator/{ind}"
 OECD_CIT = ("https://sdmx.oecd.org/public/rest/data/OECD.CTP.TPS,DSD_TAX_CIT@DF_CIT,/"
@@ -117,11 +123,11 @@ class QuotaExceeded(RuntimeError):
 REFRESH_DAYS = 30  # re-download an economy's annual data after this many days
 
 
-def _get(session, url, params=None, timeout=90, tries=4, as_json=True):
+def _get(session, url, params=None, timeout=90, tries=4, as_json=True, headers=None):
     last = None
     for attempt in range(tries):
         try:
-            r = session.get(url, params=params, timeout=timeout)
+            r = session.get(url, params=params, timeout=timeout, headers=headers)
             if r.status_code == 403 and "quota" in r.text.lower():
                 raise QuotaExceeded(f"{url}: quota exceeded")
             if r.status_code in (429, 500, 502, 503, 504):
@@ -146,14 +152,15 @@ def comtrade(session, freq: str, period: str, reporter: int, flow: str,
     if partners is not None:
         params["partnerCode"] = ",".join(map(str, partners))
     try:
-        data = _get(session, CT.format(freq=freq), params=params)
+        data = _get(session, CT.format(freq=freq), params=params,
+                    headers={"Ocp-Apim-Subscription-Key": COMTRADE_KEY} if COMTRADE_KEY else None)
     finally:
         _last_call[0] = time.time()
     if data.get("error"):
         raise RuntimeError(f"Comtrade: {data['error']}")
     rows = data.get("data") or []
-    if len(rows) >= 500:
-        raise RuntimeError(f"Comtrade preview truncated at 500 rows ({params})")
+    if len(rows) >= CT_MAX_ROWS:
+        raise RuntimeError(f"Comtrade result truncated at {CT_MAX_ROWS} rows ({params})")
     return [r for r in rows
             if r.get("motCode", 0) == 0 and r.get("partner2Code", 0) == 0
             and r.get("customsCode", "C00") == "C00" and r.get("primaryValue") is not None]
@@ -248,10 +255,12 @@ def _fetch_reporter(session, out, iso, iso_to_code, set_codes, rus, this_year, t
     rec["imports_by_partner"] = _by_partner(comtrade(session, "A", str(year), code, "M"))
     rec["exports_by_partner_prev"] = _by_partner(comtrade(session, "A", str(year - 1), code, "X"))
     rec["imports_by_partner_prev"] = _by_partner(comtrade(session, "A", str(year - 1), code, "M"))
-    # What it sells to each of the other major economies, by HS chapter (4 partners per call, < 500 rows).
+    # What it sells to each of the other major economies, by HS chapter
+    # (one call with a key; 4 partners per call on the 500-row preview).
     to = {}
-    for i in range(0, len(others), 4):
-        for r in comtrade(session, "A", str(year), code, "X", "AG2", others[i:i + 4]):
+    step = len(others) if COMTRADE_KEY else 4
+    for i in range(0, len(others), step):
+        for r in comtrade(session, "A", str(year), code, "X", "AG2", others[i:i + step]):
             if str(r["cmdCode"]).isdigit():
                 to.setdefault(str(r["partnerCode"]), {})[str(int(r["cmdCode"]))] = round(r["primaryValue"])
     rec["exports_to_majors_by_chapter"] = to
@@ -294,12 +303,14 @@ def fetch_us_customs(session, prev: dict | None) -> dict:
     Imports are fetched only for months missing from the previous cache, so a daily run makes few calls."""
     data = _get(session, TREASURY, params={
         "filter": "classification_desc:eq:Customs Duties,record_date:gte:2023-01-01",
-        "fields": "record_date,current_month_net_rcpt_amt", "sort": "record_date", "page[size]": 200})
-    duties = {}
+        "fields": "record_date,current_month_gross_rcpt_amt,current_month_refund_amt",
+        "sort": "record_date", "page[size]": 200})
+    duties, refunds = {}, {}  # gross collections, and refunds paid back to importers
     for r in data.get("data", []):
-        v = r.get("current_month_net_rcpt_amt")
-        if v not in (None, "null"):
-            duties[r["record_date"][:7]] = round(float(v))
+        g, f = r.get("current_month_gross_rcpt_amt"), r.get("current_month_refund_amt")
+        if g not in (None, "null"):
+            duties[r["record_date"][:7]] = round(float(g))
+            refunds[r["record_date"][:7]] = round(float(f)) if f not in (None, "null") else 0
     if not duties:
         raise RuntimeError("Treasury returned no customs duties")
     imports = dict((prev or {}).get("imports", {}))
@@ -318,7 +329,7 @@ def fetch_us_customs(session, prev: dict | None) -> dict:
             break
         if rows:
             imports[mo] = round(rows[0]["primaryValue"])
-    return {"duties": duties, "imports": imports}
+    return {"duties": duties, "refunds": refunds, "imports": imports}
 
 
 # --------------------------------------------------------------------------- #
@@ -502,9 +513,10 @@ def build_us_tariff(customs: dict | None):
     if not customs:
         return None
     rows = []
+    refunds = customs.get("refunds", {})
     for mo in sorted(customs["duties"]):
         d, imp = customs["duties"][mo], customs["imports"].get(mo)
-        rows.append({"month": mo, "duties": d, "imports": imp,
+        rows.append({"month": mo, "duties": d, "refunds": refunds.get(mo, 0), "imports": imp,
                      "rate": round(100 * d / imp, 2) if imp else None})
     with_rate = [r for r in rows if r["rate"] is not None]
     last12 = rows[-12:]
@@ -513,6 +525,7 @@ def build_us_tariff(customs: dict | None):
             "latest": with_rate[-1] if with_rate else None,
             "duties_12m": sum(r["duties"] for r in last12),
             "duties_prev_12m": sum(r["duties"] for r in prev12) if len(prev12) == 12 else None,
+            "refunds_12m": sum(r["refunds"] for r in last12),
             "latest_duties_month": rows[-1]}
 
 
@@ -636,13 +649,17 @@ def insights(t: dict) -> list[dict]:
     if us and us.get("latest"):
         l = us["latest"]
         base = next((r for r in us["monthly"] if r["month"] == "2024-12" and r["rate"]), None)
-        txt = f"US customs duties were {l['rate']:.1f}% of goods imports in {_month(l['month'])}"
+        txt = f"US customs duties collected were {l['rate']:.1f}% of goods imports in {_month(l['month'])}"
         if base:
             txt += f", up from {base['rate']:.1f}% in December 2024" if l["rate"] > base["rate"] else \
                    f", versus {base['rate']:.1f}% in December 2024"
         if us.get("duties_prev_12m"):
             txt += f". Duties collected in the last 12 months: {_money(us['duties_12m'])} " \
                    f"({_pct(us['duties_12m'], us['duties_prev_12m']):+.0f}% on the year before)"
+        if us.get("refunds_12m", 0) > 0.1 * us["duties_12m"]:
+            big = max(us["monthly"][-12:], key=lambda r: r["refunds"])
+            txt += f". Refunds to importers were unusually large: {_money(us['refunds_12m'])} in the last 12 months, " \
+                   f"peaking at {_money(big['refunds'])} in {_month(big['month'])}"
         out.append({"kind": "tariff", "title": "The US effective tariff rate", "text": txt + ".", "link": "us-tariff"})
     tw = [(e["taxes"]["tariff_weighted"]["value"], e) for e in t["economies"] if e["taxes"].get("tariff_weighted")]
     if tw:

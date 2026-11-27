@@ -390,7 +390,8 @@ function renderUsTariff() {
   document.getElementById("tr-us-stats").innerHTML = `
     <div><span class="l">Effective rate, ${esc(fmtDate(l.month))}</span><span class="v">${l.rate.toFixed(1)}%</span></div>
     <div><span class="l">Customs duties, last 12 months</span><span class="v">${money(us.duties_12m)} ${chg(yoy)}</span></div>
-    <div><span class="l">Latest monthly duties (${esc(fmtDate(us.latest_duties_month.month))})</span><span class="v">${money(us.latest_duties_month.duties)}</span></div>`;
+    <div><span class="l">Latest monthly duties (${esc(fmtDate(us.latest_duties_month.month))})</span><span class="v">${money(us.latest_duties_month.duties)}</span></div>
+    <div><span class="l">Refunds paid back, last 12 months</span><span class="v">${money(us.refunds_12m)}</span></div>`;
   if (tabState.active !== "trade" || !box.clientWidth) return;
 
   const W = box.clientWidth, H = Math.max(220, Math.min(300, W * 0.4));
@@ -422,7 +423,7 @@ function renderUsTariff() {
       cross.style("display", null).attr("x1", x(parse(r.month))).attr("x2", x(parse(r.month)));
       dot.style("display", null).attr("cx", x(parse(r.month))).attr("cy", y(r.rate));
       trTip(`<strong>${esc(fmtDate(r.month))}</strong><br>Effective rate ${r.rate.toFixed(2)}%<br>
-        Duties ${money(r.duties)} · imports ${money(r.imports)}`, ev);
+        Duties collected ${money(r.duties)} · imports ${money(r.imports)}${r.refunds ? `<br>Refunds paid ${money(r.refunds)}` : ""}`, ev);
     })
     .on("mouseleave", () => { cross.style("display", "none"); dot.style("display", "none"); trTipHide(); });
   box.replaceChildren(svg.node());
