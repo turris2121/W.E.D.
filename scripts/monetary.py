@@ -60,6 +60,79 @@ def fetch_bis(session) -> dict:
 
 
 # --------------------------------------------------------------------------- #
+# Fiscal policy + energy (source "macro")
+# --------------------------------------------------------------------------- #
+OECD_EO = ("https://sdmx.oecd.org/public/rest/data/OECD.ECO.MAD,DSD_EO@DF_EO,/{areas}.NLGQ+GGFLQ.A"
+           "?startPeriod={start}&format=csvfilewithlabels")
+DBNOMICS = "https://api.db.nomics.world/v22/series"
+# BIS area -> OECD Economic Outlook area / ISO3 used by the IMF and World Bank
+OECD_AREA = {"US": "USA", "XM": "EA17", "CN": "CHN", "JP": "JPN", "GB": "GBR", "KR": "KOR",
+             "AU": "AUS", "CA": "CAN", "CH": "CHE", "IN": "IND", "BR": "BRA", "RU": "RUS", "MX": "MEX"}
+WB_AREA = {**OECD_AREA, "XM": "EMU"}
+
+
+def fetch_macro(session) -> dict:
+    import datetime as dt
+    year = dt.date.today().year
+    fiscal: dict[str, dict] = {a: {"balance": {}, "debt": {}, "source": {}} for a in OECD_AREA}
+
+    # 1) OECD Economic Outlook: general government net lending (NLGQ) and gross debt (GGFLQ), % of GDP
+    inv = {v: k for k, v in OECD_AREA.items()}
+    r = session.get(OECD_EO.format(areas="+".join(OECD_AREA.values()), start=year - 2), timeout=120)
+    if r.ok:
+        for row in csv.DictReader(io.StringIO(r.text)):
+            a, v = inv.get(row.get("REF_AREA")), _num(row.get("OBS_VALUE"))
+            if a and v is not None:
+                key = "balance" if row["MEASURE"] == "NLGQ" else "debt"
+                fiscal[a][key][row["TIME_PERIOD"]] = round(v, 2)
+                fiscal[a]["source"][key] = "OECD Economic Outlook"
+
+    # 2) IMF World Economic Outlook (via DBnomics) for anything the OECD lacks
+    need = [a for a in OECD_AREA if a != "XM" and (not fiscal[a]["balance"] or not fiscal[a]["debt"])]
+    if need:
+        dims = json.dumps({"weo-country": [OECD_AREA[a] for a in need],
+                           "weo-subject": ["GGXCNL_NGDP", "GGXWDG_NGDP"]})
+        r = session.get(f"{DBNOMICS}/IMF/WEO:latest", params={"dimensions": dims, "observations": 1, "limit": 100}, timeout=120)
+        r.raise_for_status()
+        edition = None
+        for s in r.json()["series"]["docs"]:
+            iso, subj = s["series_code"].split(".")[:2]
+            a = inv.get(iso)
+            key = "balance" if subj == "GGXCNL_NGDP" else "debt"
+            edition = s.get("dataset_code", "WEO")
+            if a and not fiscal[a][key]:
+                fiscal[a][key] = {p: round(v, 2) for p, v in zip(s["period"], s["value"])
+                                  if v not in (None, "NA") and str(p) >= str(year - 2) and str(p) <= str(year + 2)}
+                fiscal[a]["source"][key] = f"IMF World Economic Outlook ({edition.replace('WEO:', '')})"
+
+    # 3) Energy prices: EIA Short-Term Energy Outlook (history + EIA projection), via DBnomics
+    energy = {}
+    for key, sid in (("brent", "BREPUUS.M"), ("gas_us", "NGHHUUS.M")):
+        r = session.get(f"{DBNOMICS}/EIA/STEO/{sid}", params={"observations": 1}, timeout=120)
+        r.raise_for_status()
+        s = r.json()["series"]["docs"][0]
+        energy[key] = [[p, round(v, 2)] for p, v in zip(s["period"], s["value"])
+                       if isinstance(v, (int, float)) and p >= START]
+    energy["last_actual"] = _shift(dt.date.today().strftime("%Y-%m"), 1)  # STEO: later months are projections
+
+    # 4) Energy import dependence: net energy imports, % of energy use (negative = net exporter)
+    dep = {}
+    r = session.get(f"https://api.worldbank.org/v2/country/{';'.join(WB_AREA.values())}/indicator/EG.IMP.CONS.ZS",
+                    params={"format": "json", "mrnev": 1, "per_page": 100}, timeout=90)
+    r.raise_for_status()
+    inv_wb = {v: k for k, v in WB_AREA.items()}
+    for row in (r.json()[1] or []):
+        code = row.get("countryiso3code") or row["country"]["id"]
+        a = inv_wb.get(code)
+        if a and row.get("value") is not None:
+            dep[a] = {"value": round(row["value"], 1), "year": int(row["date"])}
+
+    if not any(f["balance"] for f in fiscal.values()) or not energy.get("brent"):
+        raise RuntimeError("macro: no fiscal or energy data")
+    return {"fiscal": fiscal, "energy": energy, "energy_dependence": dep}
+
+
+# --------------------------------------------------------------------------- #
 # Series helpers (periods are "YYYY-MM")
 # --------------------------------------------------------------------------- #
 def _shift(period: str, months: int) -> str:
@@ -177,13 +250,115 @@ def _currency_text(bank, is_us, diff, diff_change, strength):
     return " ".join(parts)
 
 
-def _inflation(bank, cpi, position, stance, strength):
+def _fiscal(f: dict | None, year: int, stance: str, bank_short: str) -> dict | None:
+    """Fiscal impulse = rise in the deficit this year (pp of GDP). Positive = stimulus = IS shifts right."""
+    if not f or not f.get("balance"):
+        return None
+    bal = {int(k): v for k, v in f["balance"].items()}
+    debt = {int(k): v for k, v in f.get("debt", {}).items()}
+    now, prev, nxt = bal.get(year), bal.get(year - 1), bal.get(year + 1)
+    if now is None or prev is None:
+        return None
+    impulse = round(-(now - prev), 2)
+    impulse_next = round(-(nxt - now), 2) if nxt is not None else None
+    d = debt.get(year) or debt.get(year - 1)
+    stance_f = "expansionary" if impulse >= 0.3 else "contractionary" if impulse <= -0.3 else "neutral"
+
+    word = "deficit" if now < 0 else "surplus"
+    s = (f"The government runs a {word} of {abs(now):.1f}% of GDP in {year} "
+         f"({'deficit' if prev < 0 else 'surplus'} {abs(prev):.1f}% in {year - 1})")
+    s += f", with public debt at {d:.0f}% of GDP. " if d is not None else ". "
+    if stance_f == "expansionary":
+        s += (f"Fiscal policy is expansionary (impulse {impulse:+.1f} pp of GDP): more spending or lower taxes "
+              "shift the IS curve right, raising output, interest rates and inflation pressure. ")
+    elif stance_f == "contractionary":
+        s += (f"Fiscal policy is contractionary (impulse {impulse:+.1f} pp of GDP): consolidation shifts the IS curve left, "
+              "cooling output and inflation. ")
+    else:
+        s += f"Fiscal policy is roughly neutral (impulse {impulse:+.1f} pp of GDP), so it barely moves the IS curve. "
+    # Policy mix
+    if stance_f == "expansionary" and stance == "tightening":
+        s += f"The mix pulls in opposite directions: the government stimulates while the {bank_short} tightens, so rates must stay higher for longer. "
+    elif stance_f == "contractionary" and stance == "easing":
+        s += f"The mix is coordinated: fiscal tightening makes room for the {bank_short}'s rate cuts. "
+    elif stance_f == "expansionary" and stance == "easing":
+        s += "Both fiscal and monetary policy are stimulating demand, a strong push on output and inflation. "
+    elif stance_f == "contractionary" and stance == "tightening":
+        s += "Both fiscal and monetary policy are braking demand, a strong disinflationary mix. "
+    if d is not None and d >= 100:
+        s += "High debt limits room for further stimulus and makes the budget sensitive to interest rates."
+    if impulse_next is not None and abs(impulse_next) >= 0.3:
+        s += f" Plans for {year + 1} point to a {'further loosening' if impulse_next > 0 else 'tightening'} ({impulse_next:+.1f} pp)."
+    return {"balance": now, "balance_prev": prev, "balance_next": nxt, "debt": d, "impulse": impulse,
+            "impulse_next": impulse_next, "stance": stance_f, "text": s.strip(),
+            "source": f.get("source", {}).get("balance")}
+
+
+OIL_PASS_THROUGH = 0.03  # rule of thumb: +10% oil -> about +0.3 pp headline inflation
+
+
+def _energy(energy: dict, dep: dict | None) -> dict | None:
+    brent = [p for p in energy.get("brent", []) if p[0] <= energy.get("last_actual", "9999")]
+    if not brent:
+        return None
+    p_now, oil = brent[-1]
+    oil12 = _at(brent, _shift(p_now, 12))
+    change = round((oil / oil12 - 1) * 100, 1) if oil12 else None
+    fut = [p for p in energy["brent"] if p[0] > p_now]
+    ahead = _at(energy["brent"], _shift(p_now, -12)) if fut else None
+    outlook = round((ahead / oil - 1) * 100, 1) if ahead else None
+    dval = dep["value"] if dep else None
+
+    role = ("net energy importer" if dval is not None and dval > 10
+            else "net energy exporter" if dval is not None and dval < -10 else "roughly energy self-sufficient")
+    cpi_push = round(change * OIL_PASS_THROUGH, 1) if change is not None else None
+    # IS effect: importers lose real income when oil rises, exporters gain (terms of trade).
+    is_effect = round(-(change or 0) / 100 * (dval or 0) / 100, 3)
+
+    s = f"Brent oil is ${oil:.0f} a barrel"
+    s += f" ({change:+.0f}% in 12 months). " if change is not None else ". "
+    if dval is not None:
+        how = (f"{abs(dval):.0f}% of energy use {'imported' if dval > 0 else 'exported on top of home use'}"
+               if abs(dval) >= 1 else "balanced energy trade")
+        s += f"The economy is {'a ' if role.startswith('net') else ''}{role} ({how}, {dep['year']}). "
+    shock = change is not None and abs(change) >= 15
+    if shock and change > 0:
+        if dval is not None and dval > 10:
+            s += ("That is a negative supply shock: higher energy costs push prices up (cost-push inflation) "
+                  "while squeezing real incomes, shifting the IS curve left, a stagflation risk. ")
+        elif dval is not None and dval < -10:
+            s += ("For an exporter it is a terms-of-trade gain: export revenue and government income rise, "
+                  "shifting the IS curve right and supporting the currency, though fuel prices still rise at home. ")
+        else:
+            s += "Domestic production cushions the economy, but fuel and transport prices still rise. "
+    elif shock and change < 0:
+        s += ("Cheaper energy works like a positive supply shock for importers (lower costs, higher real incomes) "
+              "and a loss of income for exporters. ")
+    else:
+        s += "Energy prices have been fairly stable, so they are not a major force right now. "
+    if cpi_push is not None and abs(cpi_push) >= 0.2:
+        s += f"Rule of thumb: about {cpi_push:+.1f} pp on headline inflation. "
+    if outlook is not None:
+        s += (f"The EIA projects Brent at ${ahead:.0f} in 12 months ({outlook:+.0f}%), so the energy effect on inflation "
+              f"should {'fade' if (outlook < -5 and (change or 0) > 0) else 'build' if outlook > 5 else 'persist'}.")
+    return {"oil": oil, "oil_period": p_now, "oil_change_12m": change, "oil_outlook_12m": outlook,
+            "oil_in_12m": ahead, "import_dependence": dval, "role": role, "cpi_push": cpi_push,
+            "is_effect": is_effect, "shock": "up" if shock and change > 0 else "down" if shock else "none",
+            "text": s.strip()}
+
+
+def _inflation(bank, cpi, position, stance, strength, fiscal=None, energy=None):
     target = bank["target"]
     band = bank.get("band")
     score = {"restrictive": -1, "accommodative": 1}.get(position, 0)
     score += {"tightening": -0.5, "easing": 0.5}.get(stance, 0)
     if strength is not None:
         score += -0.5 if strength >= 3 else 0.5 if strength <= -3 else 0
+    if fiscal:
+        score += 0.5 if fiscal["impulse"] >= 0.5 else -0.5 if fiscal["impulse"] <= -0.5 else 0
+    if energy and energy["shock"] != "none":
+        fading = (energy["oil_outlook_12m"] or 0) <= -10
+        score += (0.5 if energy["shock"] == "up" else -0.5) * (0.5 if fading else 1)
     direction = "down" if score <= -1 else "up" if score >= 1 else "stable"
     arrow = {"down": "↓", "up": "↑", "stable": "→"}[direction]
 
@@ -205,6 +380,14 @@ def _inflation(bank, cpi, position, stance, strength):
         down.append("a stronger currency")
     if strength is not None and strength <= -3:
         up.append("a weaker currency (imported inflation)")
+    if fiscal and fiscal["impulse"] >= 0.5:
+        up.append("fiscal stimulus")
+    if fiscal and fiscal["impulse"] <= -0.5:
+        down.append("fiscal consolidation")
+    if energy and energy["shock"] == "up":
+        up.append(f"higher oil prices ({energy['oil_change_12m']:+.0f}% y/y)")
+    if energy and energy["shock"] == "down":
+        down.append(f"lower oil prices ({energy['oil_change_12m']:+.0f}% y/y)")
     if down:
         s += "Pushing inflation down: " + ", ".join(down) + ". "
     if up:
@@ -220,7 +403,10 @@ def _inflation(bank, cpi, position, stance, strength):
     return {"direction": direction, "arrow": arrow, "text": s}
 
 
-def build_central_banks(bis: dict, countries: list[dict]) -> list[dict]:
+def build_central_banks(bis: dict, countries: list[dict], macro: dict | None = None) -> list[dict]:
+    import datetime as dt
+    year = dt.date.today().year
+    macro = macro or {}
     banks = load_banks()
     by_iso = {c["iso3"]: c for c in countries}
     us = bis.get("US", {})
@@ -275,7 +461,12 @@ def build_central_banks(bis: dict, countries: list[dict]) -> list[dict]:
 
         stance, stance_note = _stance(d12, d3)
         position = _position(real, neutral)
-        infl = _inflation(bank, cpi, position, stance, strength)
+        fiscal = _fiscal(macro.get("fiscal", {}).get(area), year, stance, bank["short"])
+        energy = (_energy(macro["energy"], macro.get("energy_dependence", {}).get(area))
+                  if macro.get("energy") else None)
+        infl = _inflation(bank, cpi, position, stance, strength, fiscal, energy)
+        # IS shift (schematic units, pp of GDP-ish): fiscal impulse + energy terms-of-trade effect
+        is_shift = round((fiscal["impulse"] if fiscal else 0) + (energy["is_effect"] * 4 if energy else 0), 2)
 
         covered = [by_iso[i] for i in bank["countries"] if i in by_iso]
         share = round(sum(c["economy"].get("world_gdp_share") or 0 for c in covered), 2)
@@ -291,6 +482,9 @@ def build_central_banks(bis: dict, countries: list[dict]) -> list[dict]:
             "rate_gap_vs_us": diff, "rate_gap_change_12m": diff_change,
             "stance": stance, "stance_note": stance_note, "position": position,
             "lm_shift": d12 or 0,
+            "is_shift": is_shift,
+            "fiscal": fiscal,
+            "energy": energy,
             "islm_text": _islm_text(stance, d12, real, neutral, position),
             "currency_text": _currency_text(bank, is_us, diff, diff_change, strength),
             "inflation": infl,

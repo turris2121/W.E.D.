@@ -17,6 +17,8 @@ Every day at 06:00 UTC a GitHub Action runs `scripts/fetch_all.py`, commits the 
 | [Wikidata SPARQL](https://query.wikidata.org) | government form, leaders, how offices are filled, elections | daily |
 | [IPU Parline](https://data.ipu.org) | chambers, seats, electoral system, term, last election | weekly |
 | [BIS](https://data.bis.org) | central bank policy rates, CPI inflation, exchange rates (13 central banks) | daily |
+| [OECD Economic Outlook](https://www.oecd.org/economic-outlook/) + [IMF WEO](https://www.imf.org/en/Publications/WEO) via [DBnomics](https://db.nomics.world) | government budget balance and debt, with projections | daily |
+| [EIA Short-Term Energy Outlook](https://www.eia.gov/outlooks/steo/) via DBnomics + World Bank | Brent oil and gas prices with EIA projections; net energy imports | daily |
 
 If a source fails, the previous copy in `data/raw/` is used and the page shows a warning.
 

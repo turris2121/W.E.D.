@@ -1,7 +1,7 @@
 {
   "_comment": "Static facts about the central banks shown in the Central banks tab. Keyed by BIS area code. Targets are year-on-year CPI %. neutral_real_rate is a rough assumption used only to classify policy as restrictive/neutral/accommodative.",
   "US": { "name": "Federal Reserve", "short": "Fed", "currency": "USD", "countries": ["USA"],
-          "target": 2, "band": null, "target_note": "2% (PCE measure; CPI shown here)",
+          "target": 2, "band": null, "target_note": "2%, PCE measure; CPI shown here",
           "mandate": "Dual mandate: stable prices and maximum employment", "neutral_real_rate": 0.75,
           "url": "https://www.federalreserve.gov/monetarypolicy.htm" },
   "XM": { "name": "European Central Bank", "short": "ECB", "currency": "EUR",

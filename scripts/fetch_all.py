@@ -39,6 +39,7 @@ MAX_AGE_HOURS = {
     "elections": 24,
     "ipu": 24 * 7,
     "bis": 24,
+    "macro": 24,           # OECD/IMF fiscal, EIA energy, World Bank energy dependence
 }
 
 SOURCE_URLS = {
@@ -49,6 +50,7 @@ SOURCE_URLS = {
     "elections": "https://www.wikidata.org",
     "ipu": "https://data.ipu.org",
     "bis": "https://data.bis.org",
+    "macro": "https://data-explorer.oecd.org + https://db.nomics.world (IMF WEO, EIA STEO) + https://data.worldbank.org",
 }
 
 # Wikidata items that have no ISO3 code (P298) but should be matched.
@@ -327,6 +329,7 @@ FETCHERS = {
     "elections": fetch_elections,
     "ipu": fetch_ipu,
     "bis": lambda: monetary.fetch_bis(SESSION),
+    "macro": lambda: monetary.fetch_macro(SESSION),
 }
 
 
@@ -851,8 +854,10 @@ def main() -> int:
     (OUT / "meta.json").write_text(json.dumps(meta, ensure_ascii=False, indent=2))
 
     if src.get("bis"):
-        banks = monetary.build_central_banks(src["bis"], countries)
+        banks = monetary.build_central_banks(src["bis"], countries, src.get("macro"))
         (OUT / "central_banks.json").write_text(json.dumps(banks, ensure_ascii=False, separators=(",", ":")))
+        if src.get("macro"):
+            (OUT / "energy.json").write_text(json.dumps(src["macro"]["energy"], separators=(",", ":")))
         missing = [b["short"] for b in banks if b["rate"] is None or b["cpi"] is None]
         log(f"Wrote {len(banks)} central banks" + (f" (missing data: {', '.join(missing)})" if missing else ""))
 

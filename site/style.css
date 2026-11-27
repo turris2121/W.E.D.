@@ -277,3 +277,16 @@ dd { margin: 0; }
 .chart .hdot { stroke: var(--surface); stroke-width: 2; }
 .legend .sw.dashed { height: 0; border-top: 2px dashed var(--muted); background: none !important; border-radius: 0; vertical-align: 3px; }
 .tip .sw { width: 8px; height: 8px; border-radius: 2px; margin-right: 6px; display: inline-block; }
+
+/* ---------- Fiscal + energy ---------- */
+.stance.fs-expansionary, .stance.en-up { border-color: var(--k-leg); }
+.stance.fs-contractionary, .stance.en-down { border-color: var(--k-pres); }
+.mini-bars { display: grid; gap: 4px; margin: 8px 0; }
+.mb-row { display: grid; grid-template-columns: 88px 1fr 64px; gap: 8px; align-items: center; font-size: 12px; }
+.mb-y { color: var(--text-2); }
+.mb-track { height: 8px; background: var(--surface-2); border-radius: 4px; overflow: hidden; }
+.mb-bar { display: block; height: 100%; border-radius: 4px; }
+.mb-bar.neg { background: var(--k-leg); }
+.mb-bar.pos { background: var(--k-pres); }
+.mb-v { text-align: right; font-variant-numeric: tabular-nums; }
+#energy-panel p { margin: 8px 0 0; }
