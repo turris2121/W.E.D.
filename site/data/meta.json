@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-11-26T06:55:25+00:00",
+  "generated_at": "2026-11-27T06:57:38+00:00",
   "count": 196,
   "sources": {
     "countries": {
@@ -9,23 +9,23 @@
     },
     "worldbank": {
       "url": "https://data.worldbank.org",
-      "status": "cached",
-      "fetched_at": "2026-11-25T06:56:42+00:00"
+      "status": "ok",
+      "fetched_at": "2026-11-27T06:57:38+00:00"
     },
     "fx": {
       "url": "https://www.exchangerate-api.com (open.er-api.com)",
       "status": "ok",
-      "fetched_at": "2026-11-26T06:55:25+00:00"
+      "fetched_at": "2026-11-27T06:57:38+00:00"
     },
     "politics": {
       "url": "https://www.wikidata.org",
-      "status": "cached",
-      "fetched_at": "2026-11-25T06:56:42+00:00"
+      "status": "ok",
+      "fetched_at": "2026-11-27T06:57:38+00:00"
     },
     "elections": {
       "url": "https://www.wikidata.org",
-      "status": "cached",
-      "fetched_at": "2026-11-25T06:56:42+00:00"
+      "status": "ok",
+      "fetched_at": "2026-11-27T06:57:38+00:00"
     },
     "ipu": {
       "url": "https://data.ipu.org",
@@ -41,7 +41,7 @@
     "head_of_state": 99.5,
     "head_of_government": 96.9,
     "chambers_with_seats": 98.0,
-    "any_election": 74.0,
+    "any_election": 74.5,
     "next_election_known": 94.4
   }
 }
