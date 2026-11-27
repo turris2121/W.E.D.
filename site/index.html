@@ -11,7 +11,7 @@
   <header class="top">
     <div>
       <h1>World Politics Dashboard</h1>
-      <p class="sub">Elections, political systems, economies and central banks. Refreshed daily from open data.</p>
+      <p class="sub">Elections, political systems, economies, trade and central banks. Refreshed daily from open data.</p>
     </div>
     <div class="updated" id="updated">Loading…</div>
   </header>
@@ -19,6 +19,7 @@
   <nav class="tabs" role="tablist" aria-label="Dashboard sections">
     <button role="tab" id="tab-elections" aria-controls="pane-elections" data-tab="elections" aria-selected="true">Elections</button>
     <button role="tab" id="tab-countries" aria-controls="pane-countries" data-tab="countries" aria-selected="false">Countries</button>
+    <button role="tab" id="tab-trade" aria-controls="pane-trade" data-tab="trade" aria-selected="false">Trade &amp; tariffs</button>
     <button role="tab" id="tab-banks" aria-controls="pane-banks" data-tab="banks" aria-selected="false">Central banks</button>
   </nav>
 
@@ -99,6 +100,76 @@
     </section>
   </div>
 
+  <!-- ===================== Trade ===================== -->
+  <div class="pane" id="pane-trade" role="tabpanel" aria-labelledby="tab-trade" hidden>
+    <section class="kpis" id="tr-kpis" aria-label="Trade summary"></section>
+
+    <section class="panel">
+      <div class="panel-head">
+        <h2>What stands out</h2>
+        <span class="muted" id="tr-asof"></span>
+      </div>
+      <div class="insights" id="tr-insights"></div>
+    </section>
+
+    <section class="panel" id="tr-country">
+      <div class="panel-head">
+        <h2>Trade profile: what each economy sells and buys</h2>
+      </div>
+      <div class="picker" id="tr-picker" role="group" aria-label="Choose an economy"></div>
+      <div id="tr-cbody" aria-live="polite"></div>
+    </section>
+
+    <section class="panel">
+      <div class="panel-head">
+        <h2>Who trades with whom</h2>
+        <div class="seg" id="tr-mode" role="group" aria-label="Matrix values">
+          <button data-mode="value" class="on">US$ value</button>
+          <button data-mode="share">% of exporter's exports</button>
+        </div>
+      </div>
+      <p class="muted intro">Each row is an exporter, each column a buyer. Darker = more goods. Click a cell to see what flows between the two.</p>
+      <div class="legend" id="tr-matrix-legend"></div>
+      <div class="table-scroll" id="tr-matrix"></div>
+    </section>
+
+    <section class="panel" id="tr-pair" aria-live="polite"></section>
+
+    <section class="panel">
+      <div class="panel-head">
+        <h2>What each economy specialises in</h2>
+        <div class="legend rca-legend">
+          <span><span class="sw r-m3"></span>much less than average</span>
+          <span><span class="sw r-z"></span>about average (1×)</span>
+          <span><span class="sw r-p3"></span>3× or more</span>
+        </div>
+      </div>
+      <p class="muted intro">A sector's share of a country's exports divided by its share of the group's exports (revealed comparative advantage). Above 1 = the country is specialised in it.</p>
+      <div class="table-scroll" id="tr-rca"></div>
+    </section>
+
+    <section class="panel" id="tr-us">
+      <div class="panel-head">
+        <h2>US tariff pulse: duties collected ÷ goods imported</h2>
+        <span class="muted">Monthly · US Treasury &amp; UN Comtrade</span>
+      </div>
+      <div class="bd-stats" id="tr-us-stats"></div>
+      <div class="chart" id="tr-uschart"></div>
+      <p class="caption">The effective rate is what importers actually paid, after exemptions, trade-deal rates and rulings. It shows the real weight of the 2025–26 tariffs, which the scheduled averages elsewhere on this page don't capture yet. Duties are booked when collected, so they lag shipments by a few weeks.</p>
+    </section>
+
+    <section class="panel about">
+      <h2>About this data</h2>
+      <p>The 15 largest economies by GDP. Goods only (services appear as a single figure). Products are grouped by <strong>HS chapter</strong> (the 2-digit customs code, e.g. 85 = electrical machinery and electronics) and chapters are grouped into 16 sectors.</p>
+      <p class="muted">Sources: <a href="https://comtradeplus.un.org" target="_blank" rel="noopener">UN Comtrade</a> (goods trade, annual; US imports, monthly),
+        <a href="https://wits.worldbank.org" target="_blank" rel="noopener">World Bank / WITS</a> (tariff averages, trade taxes, tax revenue, services),
+        <a href="https://data-explorer.oecd.org" target="_blank" rel="noopener">OECD</a> (corporate tax rates),
+        <a href="https://fiscaldata.treasury.gov" target="_blank" rel="noopener">US Treasury</a> (customs duties).
+        Insights are produced by fixed rules from these numbers; they describe, they don't forecast. Russia's figures are mirror data from its partners.
+        Each country reports its own exports and imports, and the two sides of a flow often differ by 5–10% (timing, freight and insurance, re-exports through Hong Kong or the Netherlands).</p>
+    </section>
+  </div>
+
   <!-- ===================== Central banks ===================== -->
   <div class="pane" id="pane-banks" role="tabpanel" aria-labelledby="tab-banks" hidden>
     <section class="panel">
@@ -164,5 +235,7 @@
 <script src="app.js"></script>
 <script src="month.js"></script>
 <script src="banks.js"></script>
+<script src="tabs.js"></script>
+<script src="trade.js"></script>
 </body>
 </html>

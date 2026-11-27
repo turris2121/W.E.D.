@@ -85,6 +85,7 @@ async function load() {
   openFromHash();
   if (typeof renderMonth === "function") renderMonth();
   if (typeof initBanks === "function") initBanks();
+  if (typeof initTrade === "function") initTrade();
 }
 
 function renderHeader() {
@@ -324,7 +325,8 @@ function renderFooter() {
   const m = state.meta;
   const names = { countries: "Wikidata + World Bank (country list, capitals, currencies, regions)", worldbank: "World Bank (population, GDP)",
     fx: "ExchangeRate-API open access (USD rates)", politics: "Wikidata (government, leaders)",
-    elections: "Wikidata (elections)", ipu: "IPU Parline (parliaments)" };
+    elections: "Wikidata (elections)", ipu: "IPU Parline (parliaments)", bis: "BIS (policy rates, CPI, FX)",
+    trade: "UN Comtrade (goods trade)", tariffs: "World Bank + OECD (tariffs, taxes)", us_customs: "US Treasury + UN Comtrade (US customs duties)" };
   $("#foot").innerHTML = `<strong>Sources</strong><ul>${Object.entries(m.sources).map(([k, s]) =>
     `<li>${esc(names[k] || k)} · ${esc(s.status)}${s.fetched_at ? " · fetched " + esc(s.fetched_at.slice(0, 10)) : ""}</li>`).join("")}</ul>
     World Bank figures are the latest available year (usually 1–2 years behind). Election dates shown as a year only are not yet fixed.

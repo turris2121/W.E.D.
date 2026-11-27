@@ -20,6 +20,7 @@ from pathlib import Path
 import requests
 
 import monetary  # scripts/monetary.py (central banks, IS-LM rules)
+import trade  # scripts/trade.py (trade flows, tariffs, taxes)
 
 ROOT = Path(__file__).resolve().parent.parent
 RAW = ROOT / "data" / "raw"
@@ -40,6 +41,9 @@ MAX_AGE_HOURS = {
     "ipu": 24 * 7,
     "bis": 24,
     "macro": 24,           # OECD/IMF fiscal, EIA energy, World Bank energy dependence
+    "trade": 24,           # daily check; trade.py only re-downloads economies older than 30 days
+    "tariffs": 24 * 7,
+    "us_customs": 24,
 }
 
 SOURCE_URLS = {
@@ -51,6 +55,9 @@ SOURCE_URLS = {
     "ipu": "https://data.ipu.org",
     "bis": "https://data.bis.org",
     "macro": "https://data-explorer.oecd.org + https://db.nomics.world (IMF WEO, EIA STEO) + https://data.worldbank.org",
+    "trade": "https://comtradeplus.un.org",
+    "tariffs": "https://data.worldbank.org + https://data-explorer.oecd.org",
+    "us_customs": "https://fiscaldata.treasury.gov + https://comtradeplus.un.org",
 }
 
 # Wikidata items that have no ISO3 code (P298) but should be matched.
@@ -330,6 +337,9 @@ FETCHERS = {
     "ipu": fetch_ipu,
     "bis": lambda: monetary.fetch_bis(SESSION),
     "macro": lambda: monetary.fetch_macro(SESSION),
+    "trade": lambda: trade.fetch_trade(SESSION, (load_cache("trade") or {}).get("data")),
+    "tariffs": lambda: trade.fetch_tariffs(SESSION),
+    "us_customs": lambda: trade.fetch_us_customs(SESSION, (load_cache("us_customs") or {}).get("data")),
 }
 
 
@@ -860,6 +870,11 @@ def main() -> int:
             (OUT / "energy.json").write_text(json.dumps(src["macro"]["energy"], separators=(",", ":")))
         missing = [b["short"] for b in banks if b["rate"] is None or b["cpi"] is None]
         log(f"Wrote {len(banks)} central banks" + (f" (missing data: {', '.join(missing)})" if missing else ""))
+
+    if src.get("trade"):
+        t = trade.build_trade(src["trade"], src.get("tariffs"), src.get("us_customs"), countries)
+        (OUT / "trade.json").write_text(json.dumps(t, ensure_ascii=False, separators=(",", ":")))
+        log(f"Wrote trade for {len(t['economies'])} economies, {len(t['pairs'])} pairs, {len(t['insights'])} insights")
 
     log(f"\nWrote {len(countries)} countries to {OUT / 'countries.json'}")
     log("Coverage (% of countries with field):")
