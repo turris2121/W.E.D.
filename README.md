@@ -20,6 +20,7 @@ Every day at 06:00 UTC a GitHub Action runs `scripts/fetch_all.py`, commits the 
 | [OECD Economic Outlook](https://www.oecd.org/economic-outlook/) + [IMF WEO](https://www.imf.org/en/Publications/WEO) via [DBnomics](https://db.nomics.world) | government budget balance and debt, with projections | daily |
 | [EIA Short-Term Energy Outlook](https://www.eia.gov/outlooks/steo/) via DBnomics + World Bank | Brent oil and gas prices with EIA projections; net energy imports | daily |
 | [ILOSTAT](https://ilostat.ilo.org) (SDMX API) | ILO harmonised unemployment, national survey rates with coverage and break metadata, LU4, participation, minimum wages, average earnings | weekly |
+| [FAOSTAT](https://www.fao.org/faostat/) bulk downloads | food balance sheets (diet, production, imports, exports, import dependency) and detailed trade matrix (food import suppliers) | weekly check; re-downloaded only when FAO publishes |
 
 If a source fails, the previous copy in `data/raw/` is used and the page shows a warning.
 

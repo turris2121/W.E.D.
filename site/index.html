@@ -21,6 +21,7 @@
     <button role="tab" id="tab-countries" aria-controls="pane-countries" data-tab="countries" aria-selected="false">Countries</button>
     <button role="tab" id="tab-trade" aria-controls="pane-trade" data-tab="trade" aria-selected="false">Trade &amp; tariffs</button>
     <button role="tab" id="tab-labour" aria-controls="pane-labour" data-tab="labour" aria-selected="false">Labour</button>
+    <button role="tab" id="tab-food" aria-controls="pane-food" data-tab="food" aria-selected="false">Food</button>
     <button role="tab" id="tab-banks" aria-controls="pane-banks" data-tab="banks" aria-selected="false">Central banks</button>
   </nav>
 
@@ -277,6 +278,60 @@
     </section>
   </div>
 
+  <!-- ===================== Food ===================== -->
+  <div class="pane" id="pane-food" role="tabpanel" aria-labelledby="tab-food" hidden>
+    <section class="panel">
+      <div class="panel-head">
+        <h2>What a country eats, grows and buys</h2>
+        <span class="muted" id="fd-asof"></span>
+      </div>
+      <p class="muted intro">Pick a country to see its diet (calories per person per day), how much of each food it produces itself,
+        where it has a surplus to sell or a shortfall to cover, and which countries it buys food from.</p>
+      <div class="filters">
+        <select id="fd-country" aria-label="Country"></select>
+      </div>
+    </section>
+
+    <section id="fd-detail" aria-live="polite"></section>
+
+    <section class="panel">
+      <div class="panel-head">
+        <h2>All countries</h2>
+        <span class="muted" id="fd-count"></span>
+      </div>
+      <div class="filters">
+        <input id="fd-q" type="search" placeholder="Search country…" aria-label="Search country">
+        <select id="fd-region" aria-label="Region"><option value="">All regions</option></select>
+      </div>
+      <div class="table-scroll">
+        <table id="fd-tbl">
+          <thead><tr>
+            <th data-k="name">Country</th>
+            <th data-k="kcal" class="num">Calories / day</th>
+            <th data-k="kchg" class="num">vs 10 yrs ago</th>
+            <th data-k="protein" class="num">Protein g/day</th>
+            <th data-k="animal_share" class="num">From animal foods</th>
+            <th data-k="cereal_dependency" class="num">Cereals imported</th>
+            <th data-k="food_imports_kusd" class="num">Food imports</th>
+            <th data-k="supplier">Main supplier</th>
+            <th data-k="top_shortfall">Biggest shortfall</th>
+            <th data-k="top_surplus">Biggest surplus</th>
+          </tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </section>
+
+    <section class="panel about">
+      <h2>How to read this tab</h2>
+      <p><strong>Calories, protein, fat</strong>: food available per person per day (FAO food balance sheets), which is food supplied to households and shops, so it is higher than what people actually eat (waste at home is included).
+        <strong>Import dependency</strong>: FAO's ratio of imports to what the country uses (production + imports − exports); 0% = fully home-grown, 100% = all imported.
+        <strong>Shortfalls / surpluses</strong>: net imports or net exports of each food, in tonnes; self-sufficiency = production ÷ domestic supply.
+        <strong>Bought from</strong>: share of the country's food import value by supplier (FAO detailed trade matrix), for all food and per food group.</p>
+      <p class="muted">Data: <a href="https://www.fao.org/faostat/" target="_blank" rel="noopener">FAOSTAT</a> food balance sheets and detailed trade matrix. Fish and seafood are in the food balance sheets but not in FAO's trade matrix, so their suppliers are not shown. Live animals, animal feed, tobacco and fibres are excluded from food imports.</p>
+    </section>
+  </div>
+
   <!-- ===================== Central banks ===================== -->
   <div class="pane" id="pane-banks" role="tabpanel" aria-labelledby="tab-banks" hidden>
     <section class="panel">
@@ -342,5 +397,6 @@
 <script src="tabs.js"></script>
 <script src="trade.js"></script>
 <script src="labour.js"></script>
+<script src="food.js"></script>
 </body>
 </html>

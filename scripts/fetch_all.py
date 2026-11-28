@@ -22,6 +22,7 @@ import requests
 import monetary  # scripts/monetary.py (central banks, IS-LM rules)
 import trade  # scripts/trade.py (trade flows, tariffs, taxes)
 import labour  # scripts/labour.py (harmonised unemployment, definition changes, minimum wages)
+import food  # scripts/food.py (FAOSTAT diets, self-sufficiency, food import partners)
 
 ROOT = Path(__file__).resolve().parent.parent
 RAW = ROOT / "data" / "raw"
@@ -48,6 +49,7 @@ MAX_AGE_HOURS = {
     "services": 24 * 7,
     "census": 24,
     "labour": 24 * 7,      # ILOSTAT updates monthly at most; weekly is plenty
+    "food": 24 * 7,        # FAOSTAT bulk files; re-downloaded only when FAO publishes a new version
 }
 
 SOURCE_URLS = {
@@ -65,6 +67,7 @@ SOURCE_URLS = {
     "services": "https://data-explorer.oecd.org (OECD-WTO BaTIS)",
     "census": "https://www.census.gov/foreign-trade",
     "labour": "https://ilostat.ilo.org (SDMX API)",
+    "food": "https://www.fao.org/faostat/ (bulk downloads)",
 }
 
 # Wikidata items that have no ISO3 code (P298) but should be matched.
@@ -350,6 +353,7 @@ FETCHERS = {
     "services": lambda: trade.fetch_services(SESSION),
     "census": lambda: trade.fetch_census(SESSION),
     "labour": lambda: labour.fetch_labour(SESSION),
+    "food": lambda: food.fetch_food(SESSION, (load_cache("food") or {}).get("data")),
 }
 
 
@@ -891,6 +895,15 @@ def main() -> int:
         lab = labour.build_labour(src["labour"], countries)
         (OUT / "labour.json").write_text(json.dumps(lab, ensure_ascii=False, separators=(",", ":")))
         log(f"Wrote labour data for {len(lab['countries'])} countries")
+
+    if src.get("food"):
+        fd = food.build_food(src["food"], countries)
+        details = fd.pop("details")
+        (OUT / "food.json").write_text(json.dumps(fd, ensure_ascii=False, separators=(",", ":")))
+        (OUT / "food").mkdir(exist_ok=True)
+        for iso, d in details.items():
+            (OUT / "food" / f"{iso}.json").write_text(json.dumps(d, ensure_ascii=False, separators=(",", ":")))
+        log(f"Wrote food data for {len(details)} countries")
 
     log(f"\nWrote {len(countries)} countries to {OUT / 'countries.json'}")
     log("Coverage (% of countries with field):")
