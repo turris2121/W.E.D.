@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-11-28T20:59:49+00:00",
+  "generated_at": "2026-11-28T21:16:01+00:00",
   "count": 196,
   "sources": {
     "countries": {
@@ -45,7 +45,7 @@
     "trade": {
       "url": "https://comtradeplus.un.org",
       "status": "cached",
-      "fetched_at": "2026-11-28T20:40:46+00:00"
+      "fetched_at": "2026-11-28T20:58:44+00:00"
     },
     "tariffs": {
       "url": "https://data.worldbank.org + https://data-explorer.oecd.org",
@@ -57,10 +57,25 @@
       "status": "cached",
       "fetched_at": "2026-11-28T20:40:46+00:00"
     },
+    "services": {
+      "url": "https://data-explorer.oecd.org (OECD-WTO BaTIS)",
+      "status": "cached",
+      "fetched_at": "2026-11-28T20:55:45+00:00"
+    },
+    "census": {
+      "url": "https://www.census.gov/foreign-trade",
+      "status": "error",
+      "error": "Census: Expecting value: line 1 column 1 (char 0)"
+    },
     "labour": {
       "url": "https://ilostat.ilo.org (SDMX API)",
       "status": "cached",
       "fetched_at": "2026-11-28T20:35:01+00:00"
+    },
+    "food": {
+      "url": "https://www.fao.org/faostat/ (bulk downloads)",
+      "status": "cached",
+      "fetched_at": "2026-11-28T21:12:29+00:00"
     }
   },
   "coverage_percent": {
