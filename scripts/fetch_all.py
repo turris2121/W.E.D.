@@ -21,6 +21,7 @@ import requests
 
 import monetary  # scripts/monetary.py (central banks, IS-LM rules)
 import trade  # scripts/trade.py (trade flows, tariffs, taxes)
+import labour  # scripts/labour.py (harmonised unemployment, definition changes, minimum wages)
 
 ROOT = Path(__file__).resolve().parent.parent
 RAW = ROOT / "data" / "raw"
@@ -44,6 +45,7 @@ MAX_AGE_HOURS = {
     "trade": 24,           # daily check; trade.py only re-downloads economies older than 30 days
     "tariffs": 24 * 7,
     "us_customs": 24,
+    "labour": 24 * 7,      # ILOSTAT updates monthly at most; weekly is plenty
 }
 
 SOURCE_URLS = {
@@ -58,6 +60,7 @@ SOURCE_URLS = {
     "trade": "https://comtradeplus.un.org",
     "tariffs": "https://data.worldbank.org + https://data-explorer.oecd.org",
     "us_customs": "https://fiscaldata.treasury.gov + https://comtradeplus.un.org",
+    "labour": "https://ilostat.ilo.org (SDMX API)",
 }
 
 # Wikidata items that have no ISO3 code (P298) but should be matched.
@@ -340,6 +343,7 @@ FETCHERS = {
     "trade": lambda: trade.fetch_trade(SESSION, (load_cache("trade") or {}).get("data")),
     "tariffs": lambda: trade.fetch_tariffs(SESSION),
     "us_customs": lambda: trade.fetch_us_customs(SESSION, (load_cache("us_customs") or {}).get("data")),
+    "labour": lambda: labour.fetch_labour(SESSION),
 }
 
 
@@ -875,6 +879,11 @@ def main() -> int:
         t = trade.build_trade(src["trade"], src.get("tariffs"), src.get("us_customs"), countries)
         (OUT / "trade.json").write_text(json.dumps(t, ensure_ascii=False, separators=(",", ":")))
         log(f"Wrote trade for {len(t['economies'])} economies, {len(t['pairs'])} pairs, {len(t['insights'])} insights")
+
+    if src.get("labour"):
+        lab = labour.build_labour(src["labour"], countries)
+        (OUT / "labour.json").write_text(json.dumps(lab, ensure_ascii=False, separators=(",", ":")))
+        log(f"Wrote labour data for {len(lab['countries'])} countries")
 
     log(f"\nWrote {len(countries)} countries to {OUT / 'countries.json'}")
     log("Coverage (% of countries with field):")

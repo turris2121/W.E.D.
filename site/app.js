@@ -86,6 +86,7 @@ async function load() {
   if (typeof renderMonth === "function") renderMonth();
   if (typeof initBanks === "function") initBanks();
   if (typeof initTrade === "function") initTrade();
+  if (typeof initLabour === "function") initLabour();
 }
 
 function renderHeader() {

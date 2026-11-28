@@ -5,7 +5,7 @@
    Load order: banks.js, then this file. banks.js has its own 3-tab versions of initTabs/tabHash;
    these later declarations replace them, and activateTab() below keeps banks.js's calls working. */
 
-const TAB_NAMES = ["elections", "countries", "trade", "banks"];
+const TAB_NAMES = ["elections", "countries", "trade", "labour", "banks"];
 const tabState = { active: "elections", sub: "" };
 
 const hasBanks = () => typeof bankState !== "undefined";

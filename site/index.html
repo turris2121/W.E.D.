@@ -20,6 +20,7 @@
     <button role="tab" id="tab-elections" aria-controls="pane-elections" data-tab="elections" aria-selected="true">Elections</button>
     <button role="tab" id="tab-countries" aria-controls="pane-countries" data-tab="countries" aria-selected="false">Countries</button>
     <button role="tab" id="tab-trade" aria-controls="pane-trade" data-tab="trade" aria-selected="false">Trade &amp; tariffs</button>
+    <button role="tab" id="tab-labour" aria-controls="pane-labour" data-tab="labour" aria-selected="false">Labour</button>
     <button role="tab" id="tab-banks" aria-controls="pane-banks" data-tab="banks" aria-selected="false">Central banks</button>
   </nav>
 
@@ -170,6 +171,89 @@
     </section>
   </div>
 
+  <!-- ===================== Labour ===================== -->
+  <div class="pane" id="pane-labour" role="tabpanel" aria-labelledby="tab-labour" hidden>
+    <section class="panel lb-intro">
+      <h2>Unemployment, measured the same way everywhere</h2>
+      <p>Governments can lower their headline unemployment rate without creating a single job: count anyone who worked <em>one hour</em> as employed,
+        survey only cities, drop people who stopped searching, change the survey, or stop publishing a bad number.
+        This tab therefore uses one yardstick for every country, the <strong>ILO harmonised unemployment rate</strong> (same ILO definition, same model),
+        and sets each country's own survey figure, its definition changes and its hidden unemployment next to it.</p>
+    </section>
+
+    <section class="kpis" id="lb-kpis" aria-label="Labour summary"></section>
+
+    <section class="panel">
+      <div class="panel-head">
+        <h2>Definition &amp; method changes watchlist</h2>
+        <div class="seg" id="lb-ev-filter" role="group" aria-label="Filter changes">
+          <button data-f="all" class="on">All</button>
+          <button data-f="redefinition">Redefinitions &amp; suspensions</button>
+          <button data-f="survey">Survey &amp; coverage changes</button>
+          <button data-f="break">Breaks in series</button>
+        </div>
+      </div>
+      <p class="muted intro">Newest first. <span class="tagc">hand-checked</span> = documented national changes; <span class="taga">auto</span> = detected from ILO metadata (survey name, coverage notes, break flags).</p>
+      <div id="lb-events" class="lb-events"></div>
+    </section>
+
+    <section class="panel">
+      <div class="panel-head">
+        <h2>Headline vs hidden unemployment: the largest economies</h2>
+        <span class="muted">◆ ILO harmonised headline · ● national survey · ▮ broad measure (LU4)</span>
+      </div>
+      <p class="muted intro">The line runs from the headline rate to the broad rate, which adds people working fewer hours than they want and people who want a job but have stopped searching. A long line means the headline hides a lot. Click a country for its full history.</p>
+      <div id="lb-dumbbell" class="chart"></div>
+    </section>
+
+    <section class="panel" id="lb-detail" aria-live="polite" hidden></section>
+
+    <section class="panel">
+      <div class="panel-head">
+        <h2>All countries</h2>
+        <span class="muted" id="lb-count"></span>
+      </div>
+      <div class="filters">
+        <input id="lb-q" type="search" placeholder="Search country…" aria-label="Search country">
+        <select id="lb-region" aria-label="Region"><option value="">All regions</option></select>
+        <select id="lb-grade" aria-label="Comparability">
+          <option value="">Any comparability</option><option>High</option><option>Medium</option><option>Low</option>
+        </select>
+      </div>
+      <div class="table-scroll">
+        <table id="lb-tbl">
+          <thead><tr>
+            <th data-k="name">Country</th>
+            <th data-k="harmonised" class="num">Unemployment (ILO harmonised)</th>
+            <th data-k="national" class="num">National survey (ILO def.)</th>
+            <th data-k="gap" class="num">Gap</th>
+            <th data-k="youth" class="num">Youth 15–24</th>
+            <th data-k="lu4" class="num">Broad (LU4)</th>
+            <th data-k="participation" class="num">Participation</th>
+            <th data-k="pchg" class="num">Particip. 5-yr</th>
+            <th data-k="grade">Comparability</th>
+            <th data-k="changes" class="num">Changes (10 yr)</th>
+            <th data-k="mw_usd" class="num">Min. wage $/month</th>
+            <th data-k="mw_ppp" class="num">Min. wage PPP</th>
+            <th data-k="mw_avg" class="num">% of avg wage</th>
+          </tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </section>
+
+    <section class="panel about">
+      <h2>How to read this tab</h2>
+      <p><strong>ILO harmonised rate</strong>: unemployed = without work, available, and actively searching, for people 15+, estimated by the International Labour Organization for every country with one model, so countries and years are comparable even when national methods change. Years after the latest estimate are ILO projections.
+        <strong>National survey (ILO def.)</strong>: the country's own labour force survey, re-processed by the ILO to the ILO definition, so it is <em>not</em> always the government's headline figure (e.g. Nigeria's old 33% rate or China's registered rate never appear here). Coverage limits (cities only, age limits) are shown where they apply; governments' own redefinitions are listed in the watchlist.
+        <strong>Broad (LU4)</strong>: unemployed + people working fewer hours than they want + people who want work but are not searching or not available.
+        <strong>Participation</strong>: share of people 15+ who work or look for work; a falling rate can hide unemployment.</p>
+      <p class="muted"><strong>Comparability grade</strong> (High / Medium / Low) adds penalties for: survey covering only part of the country, non-standard age or population coverage, a gap of 2 pp or more against the harmonised rate, no national data in the last 3 years, definition or method changes in the last 10 years (more for 3+), and official redefinitions or suspended publication.
+        <strong>Minimum wage</strong>: statutory monthly minimum (ILO); USD at market rates, PPP adjusted for local prices; "% of avg wage" compares it with average monthly earnings of employees in the same year where available. Countries without a statutory minimum (wages set by collective agreements) do not appear.
+        Data: <a href="https://ilostat.ilo.org" target="_blank" rel="noopener">ILOSTAT</a>, plus hand-checked notes from national statistics offices.</p>
+    </section>
+  </div>
+
   <!-- ===================== Central banks ===================== -->
   <div class="pane" id="pane-banks" role="tabpanel" aria-labelledby="tab-banks" hidden>
     <section class="panel">
@@ -237,5 +321,6 @@
 <script src="banks.js"></script>
 <script src="tabs.js"></script>
 <script src="trade.js"></script>
+<script src="labour.js"></script>
 </body>
 </html>

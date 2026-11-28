@@ -1,0 +1,66 @@
+{
+  "_comment": "Hand-checked notes on how countries define and publish unemployment. These are changes that ILO metadata alone does not show. Each entry: year, type (redefinition | survey change | suspension | two measures | coverage | data gap), title, detail, source. Keep it factual; add new ones as they happen.",
+  "NGA": [
+    { "year": 2023, "type": "redefinition", "title": "New definition: 1 hour of work counts as employed",
+      "detail": "In 2023 the National Bureau of Statistics adopted a labour survey aligned with the ILO's 2013 standard. Anyone working at least 1 hour in the reference week now counts as employed; the previous national definition treated people working under 20 hours as unemployed, and own-use farming no longer counts as employment. The headline rate went from 33.3% (Q4 2020, old method) to 5.3% (Q4 2022, new method). The two series cannot be compared.",
+      "source": "https://www.nigerianstat.gov.ng/" }
+  ],
+  "CHN": [
+    { "year": 2018, "type": "survey change", "title": "Surveyed urban rate replaces registered rate",
+      "detail": "For years the headline was the registered urban unemployment rate (around 4%), which counted only people registered at local labour offices. Since 2018 the main measure is the surveyed urban unemployment rate. Both cover cities only, so most rural workers and many migrant workers are outside the headline.",
+      "source": "https://www.stats.gov.cn/english/" },
+    { "year": 2023, "type": "suspension", "title": "Youth unemployment suspended, then redefined",
+      "detail": "After youth (16–24) urban unemployment hit a record 21.3% in June 2023, the National Bureau of Statistics stopped publishing it. It resumed in January 2024 with a new method that excludes students still in school; the first new figure (December 2023) was 14.9%.",
+      "source": "https://www.stats.gov.cn/english/" }
+  ],
+  "IND": [
+    { "year": 2019, "type": "survey change", "title": "New survey (PLFS) and a delayed report",
+      "detail": "The Periodic Labour Force Survey replaced the NSSO employment-unemployment surveys from 2017-18. Its first report showed 6.1%, the highest in decades; it was released only after the 2019 general election. Sample design differs from the older surveys, so rates before and after are not directly comparable.",
+      "source": "https://www.mospi.gov.in/" }
+  ],
+  "ARG": [
+    { "year": 2016, "type": "suspension", "title": "Statistical emergency at INDEC",
+      "detail": "In January 2016 the new government declared a statistical emergency at INDEC after years of questioned official data. INDEC advises caution when comparing labour statistics from 2007–2015 with later years. The household survey (EPH) covers 31 urban areas only.",
+      "source": "https://www.indec.gob.ar/" }
+  ],
+  "BRA": [
+    { "year": 2016, "type": "survey change", "title": "National survey replaces 6-city survey",
+      "detail": "The continuous national household survey (PNAD Contínua, from 2012) replaced the Monthly Employment Survey (PME), which covered only 6 metropolitan regions and ended in 2016. Rates from the two surveys are not comparable.",
+      "source": "https://www.ibge.gov.br/" }
+  ],
+  "ZAF": [
+    { "year": null, "type": "two measures", "title": "Official (narrow) vs expanded unemployment",
+      "detail": "Statistics South Africa publishes an official rate that counts only people actively searching for work, and an expanded rate that also counts discouraged job-seekers who want work. The expanded rate is usually about 10 points higher.",
+      "source": "https://www.statssa.gov.za/" }
+  ],
+  "GBR": [
+    { "year": 2023, "type": "data gap", "title": "Labour Force Survey quality problems",
+      "detail": "Response rates to the Labour Force Survey fell sharply. In October 2023 the ONS temporarily suspended LFS-based estimates and later labelled them 'official statistics in development' while a transformed survey is introduced. Recent UK rates carry more uncertainty than usual.",
+      "source": "https://www.ons.gov.uk/" }
+  ],
+  "DEU": [
+    { "year": null, "type": "two measures", "title": "Registered vs ILO unemployment",
+      "detail": "The Federal Employment Agency publishes registered unemployment (people registered as jobless with job centres). Destatis publishes the ILO survey-based rate, which is considerably lower because the ILO definition is stricter (e.g. any paid work in the week counts as employed).",
+      "source": "https://www.destatis.de/" }
+  ],
+  "ESP": [
+    { "year": 2022, "type": "two measures", "title": "Labour reform and 'fijos discontinuos' (registered unemployment)",
+      "detail": "The 2022 labour reform turned many temporary contracts into 'fijos discontinuos' (permanent-intermittent) contracts. Workers on these contracts who are inactive between jobs are not counted as registered unemployed, which critics say lowers registered unemployment. The ILO-based survey rate (EPA) is not affected in the same way.",
+      "source": "https://www.ine.es/" }
+  ],
+  "TUR": [
+    { "year": 2021, "type": "survey change", "title": "New labour force survey methodology",
+      "detail": "From 2021 TurkStat applied a new labour force survey methodology in line with EU regulation 2019/1700 and revised earlier years. Compare older published figures with care.",
+      "source": "https://data.tuik.gov.tr/" }
+  ],
+  "USA": [
+    { "year": 2025, "type": "data gap", "title": "October 2025 household survey not collected",
+      "detail": "The household survey for October 2025 was not collected because of the federal government shutdown; the ILO's 2025 annual figure is an 11-month average. The official rate (U-3) counts people aged 16+; BLS also publishes U-6, which adds discouraged and involuntary part-time workers and runs several points higher.",
+      "source": "https://www.bls.gov/cps/" }
+  ],
+  "MEX": [
+    { "year": null, "type": "coverage", "title": "Very low rate, very high informality",
+      "detail": "Anyone working at least 1 hour counts as employed, and over half of workers are informal, so the unemployment rate stays very low even when job quality is poor. INEGI also publishes underemployment and informality rates, which give a fuller picture.",
+      "source": "https://www.inegi.org.mx/" }
+  ]
+}
