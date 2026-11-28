@@ -149,6 +149,29 @@
       <div class="table-scroll" id="tr-rca"></div>
     </section>
 
+    <section class="panel" id="tr-routes">
+      <div class="panel-head">
+        <h2>Trade routed around the tariffs</h2>
+        <span class="muted">Goods exports, first year = 100</span>
+      </div>
+      <p class="muted intro">Since the 2018 US tariffs on China, part of China's sales to the US has gone through third countries. Supply chains moved assembly to Vietnam and Mexico, which buy Chinese parts and sell finished goods to the US.</p>
+      <div class="legend" id="tr-route-legend"></div>
+      <div class="chart" id="tr-routechart"></div>
+      <details class="small" style="margin-top:8px"><summary>Show the values</summary><div class="table-scroll" id="tr-route-table"></div></details>
+    </section>
+
+    <section class="panel" id="tr-uspartners" hidden>
+      <div class="panel-head">
+        <h2>What the US actually charges each partner</h2>
+        <span class="muted" id="tr-usp-window"></span>
+      </div>
+      <p class="muted intro">Duty owed ÷ value of US imports for consumption, over the last 12 months (US Census calculated duties). Click a partner to see its trend and which products carry the tariffs.</p>
+      <div class="two">
+        <div id="tr-usp-bars"></div>
+        <div id="tr-usp-detail"></div>
+      </div>
+    </section>
+
     <section class="panel" id="tr-us">
       <div class="panel-head">
         <h2>US tariff pulse: duties collected ÷ goods imported</h2>
@@ -161,12 +184,12 @@
 
     <section class="panel about">
       <h2>About this data</h2>
-      <p>The 15 largest economies by GDP. Goods only (services appear as a single figure). Products are grouped by <strong>HS chapter</strong> (the 2-digit customs code, e.g. 85 = electrical machinery and electronics) and chapters are grouped into 16 sectors.</p>
+      <p>The 15 largest economies by GDP plus the Netherlands (Europe's main port), Saudi Arabia (energy) and Vietnam (where supply chains moved from China). Goods only (services appear as a single figure). Products are grouped by <strong>HS chapter</strong> (the 2-digit customs code, e.g. 85 = electrical machinery and electronics) and chapters are grouped into 16 sectors.</p>
       <p class="muted">Sources: <a href="https://comtradeplus.un.org" target="_blank" rel="noopener">UN Comtrade</a> (goods trade, annual; US imports, monthly),
         <a href="https://wits.worldbank.org" target="_blank" rel="noopener">World Bank / WITS</a> (tariff averages, trade taxes, tax revenue, services),
         <a href="https://data-explorer.oecd.org" target="_blank" rel="noopener">OECD</a> (corporate tax rates),
         <a href="https://fiscaldata.treasury.gov" target="_blank" rel="noopener">US Treasury</a> (customs duties).
-        Insights are produced by fixed rules from these numbers; they describe, they don't forecast. Russia's figures are mirror data from its partners.
+        Insights are produced by fixed rules from these numbers; they describe, they don't forecast. Russia's and Vietnam's figures are mirror data from their partners. Services: OECD-WTO Balanced Trade in Services. US tariffs by partner: US Census Bureau (calculated duties).
         Each country reports its own exports and imports, and the two sides of a flow often differ by 5–10% (timing, freight and insurance, re-exports through Hong Kong or the Netherlands).</p>
     </section>
   </div>

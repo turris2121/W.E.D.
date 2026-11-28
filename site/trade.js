@@ -52,10 +52,11 @@ async function initTrade() {
   renderMatrix();
   renderRca();
   renderUsTariff();
+  renderUsPartners();
   wireTrade();
   applyTradeSub(tabState.active === "trade" ? tabState.sub : "");
   document.addEventListener("tabshow", (ev) => {
-    if (ev.detail.name === "trade") { applyTradeSub(ev.detail.sub); renderUsTariff(); }
+    if (ev.detail.name === "trade") { applyTradeSub(ev.detail.sub); renderUsTariff(); renderRoutes(); renderUsPartnerDetail(); }
   });
 }
 
@@ -76,13 +77,18 @@ function wireTrade() {
     const c = ev.target.closest("[data-tr-country]");
     const p = ev.target.closest("[data-tr-pair]");
     const go = ev.target.closest("[data-tr-go]");
+    const up = ev.target.closest("[data-us-partner]");
+    if (up) { tr.usPartner = up.dataset.usPartner; renderUsPartners(); renderUsPartnerDetail(); return; }
     if (c) selectCountry(c.dataset.trCountry, c.hasAttribute("data-scroll"));
     else if (p) selectPair(p.dataset.trPair, true);
     else if (go) {
       const [kind, val] = go.dataset.trGo.split("/");
       if (kind === "country") selectCountry(val, true);
       else if (kind === "pair") selectPair(val, true);
-      else document.getElementById("tr-us").scrollIntoView({ behavior: "smooth", block: "start" });
+      else {
+        const id = { routes: "tr-routes", "us-partners": "tr-uspartners" }[kind] || "tr-us";
+        document.getElementById(id)?.scrollIntoView({ behavior: "smooth", block: "start" });
+      }
     }
   });
   document.querySelectorAll("#tr-mode button").forEach((b) => b.addEventListener("click", () => {
@@ -91,7 +97,11 @@ function wireTrade() {
     renderMatrix();
   }));
   pane.addEventListener("mouseleave", trTipHide);
-  addEventListener("resize", () => { if (tabState.active === "trade") renderUsTariff(); });
+  let rz;
+  addEventListener("resize", () => {
+    clearTimeout(rz);
+    rz = setTimeout(() => { if (tabState.active === "trade") { renderUsTariff(); renderRoutes(); renderCountryHistory(); renderPairHistory(); } }, 150);
+  });
 }
 
 function selectCountry(iso, scroll) {
@@ -134,7 +144,7 @@ function renderTradeKpis() {
     `Goods trade ${years.join("/")} · UN Comtrade`;
   if (!d.complete) {
     document.getElementById("tr-kpis").insertAdjacentHTML("beforebegin",
-      `<div class="panel warn-note" role="status">⚠ Still downloading: ${es.length} of 15 economies so far. UN Comtrade limits free downloads per day, so the rest arrive on the next daily update.</div>`);
+      `<div class="panel warn-note" role="status">⚠ Still downloading: ${es.length} of 18 economies so far. UN Comtrade limits free downloads per day, so the rest arrive on the next daily update.</div>`);
   }
 }
 
@@ -223,14 +233,14 @@ function renderCountry() {
     ["Goods imports", money(e.imports)],
     ["Trade balance", `<span class="${e.balance >= 0 ? "pos" : "neg"}">${e.balance >= 0 ? "Surplus" : "Deficit"} ${money(Math.abs(e.balance))}</span>`],
     ["Trade, % of GDP", t.trade_pct_gdp ? pct1(t.trade_pct_gdp.value) + ` <span class="muted">(${t.trade_pct_gdp.year}, incl. services)</span>` : na],
-    ["Services exports", services],
+    ["Services exports", e.services ? money(e.services.exports) + ` <span class="muted">(${e.services.year})</span>` : services],
     ["#1 customer", topP ? `${esc(topP.flag || "")} ${esc(topP.name)} <span class="muted">${pct1(topP.share)}</span>` : na],
     ["Exports go to", blocTxt || na],
   ];
   document.getElementById("tr-cbody").innerHTML = `
     <div class="bd-head"><span class="bd-flag">${esc(e.flag || "")}</span>
       <div><h2>${esc(e.name)}</h2><div class="muted">Goods trade in ${e.year}${e.mirror
-        ? " · <strong>mirror data</strong>: Russia stopped reporting to the UN, so this is what the other 14 economies report buying from and selling to it. Its trade with other countries (e.g. Türkiye, Kazakhstan) is missing." : ""}</div></div></div>
+        ? ` · <strong>mirror data</strong>: ${esc(e.name)} has not reported recent data to the UN, so this is what the other economies here report buying from and selling to it. Its trade with countries outside this group is missing.` : ""}</div></div></div>
     <div class="bd-stats">${stats.map(([l, v]) => `<div><span class="l">${esc(l)}</span><span class="v">${v}</span></div>`).join("")}</div>
     <div class="two">
       <div><h3><span class="sw ex"></span>What it sells: exports by sector</h3>${barList(e.exports_by_sector, e.exports, "ex")}</div>
@@ -244,8 +254,41 @@ function renderCountry() {
       <div><h3>Where it sells <span class="muted">(top 10, change on year)</span></h3>${partnerList(e.export_partners, e.iso3)}</div>
       <div><h3>Where it buys <span class="muted">(top 10, change on year)</span></h3>${partnerList(e.import_partners, e.iso3)}</div>
     </div>
+    <div class="two">
+      <div><h3>Goods trade since ${e.history?.[0]?.year ?? "2018"}</h3>
+        <div class="legend"><span><span class="sw ex"></span>Exports</span><span><span class="sw im"></span>Imports</span></div>
+        <div class="chart" id="tr-chist"></div></div>
+      <div>${servicesBlock(e)}</div>
+    </div>
     <div class="cards tax-cards">${taxCard(e)}</div>
     <p class="muted small">Click a major partner to see that relationship. Values are in current US dollars as reported to UN Comtrade (exports f.o.b., imports usually c.i.f.), so A's exports to B and B's imports from A rarely match exactly.</p>`;
+  renderCountryHistory();
+}
+
+function servicesBlock(e) {
+  const s = e.services;
+  if (!s) return '<h3>Services</h3><div class="empty">No services breakdown available.</div>';
+  const bal = s.balance;
+  return `<h3>Services trade <span class="muted">(${s.year}, OECD-WTO)</span></h3>
+    <div class="bd-stats compact">
+      <div><span class="l">Services exports</span><span class="v">${money(s.exports)}</span></div>
+      <div><span class="l">Services imports</span><span class="v">${money(s.imports)}</span></div>
+      <div><span class="l">Services balance</span><span class="v ${bal >= 0 ? "pos" : "neg"}">${bal == null ? na : (bal >= 0 ? "Surplus " : "Deficit ") + money(Math.abs(bal))}</span></div>
+    </div>
+    <h3>What services it sells</h3>${barList(s.types.map((x) => ({ sector: x.name, value: x.value, share: x.share })), s.exports, "ex", 6)}
+    ${s.partners.length ? `<h3 style="margin-top:12px">Biggest services buyers among these economies</h3>
+      <ol class="partners">${s.partners.slice(0, 5).map((p) => `<li><button class="prow" data-tr-pair="${esc(pairKey(e.iso3, p.iso3))}">
+        <span class="flag">${esc(flagOf(p.iso3))}</span><span class="pn">${esc(nameOf(p.iso3))}</span>
+        <span class="bp">${pct1(p.share)}</span><span class="bv">${money(p.value)}</span><span></span></button></li>`).join("")}</ol>` : ""}`;
+}
+
+function renderCountryHistory() {
+  const e = tr.E[tr.iso], box = document.getElementById("tr-chist");
+  if (!e || !box || !e.history?.length) return;
+  trLines(box, [
+    { name: "Exports", color: "var(--ex)", points: e.history.filter((h) => h.exports).map((h) => [h.year, h.exports]) },
+    { name: "Imports", color: "var(--im)", points: e.history.filter((h) => h.imports).map((h) => [h.year, h.imports]) },
+  ], { yFmt: (v) => "$" + compact.format(v), label: `${e.name}: goods exports and imports by year` });
 }
 
 /* ---------- relationship matrix (heatmap) ---------- */
@@ -317,7 +360,8 @@ function renderPair() {
       <span class="bt"><span class="bf ${cls}" style="width:${x.share || 0}%"></span></span>
       <span class="bp">${pct1(x.share)}</span><span class="bv">${money(x.value)}</span></li>`).join("")}</ol>`
     : '<div class="empty">No product breakdown reported.</div>';
-  const mirrorNote = p.a === "RUS" || p.b === "RUS" ? '<p class="muted small">Russia’s side is mirror data: what its partner reports.</p>' : "";
+  const mir = [A, B].filter((x) => x.mirror).map((x) => x.name);
+  const mirrorNote = mir.length ? `<p class="muted small">${esc(mir.join(" and "))}: mirror data (what the partner reports).</p>` : "";
   el.innerHTML = `
     <div class="panel-head"><h2>${esc(A.flag || "")} ${esc(A.name)} ⇄ ${esc(B.flag || "")} ${esc(B.name)}</h2>
       <span class="muted">Total ${money(p.total)} · click any cell above to change</span></div>
@@ -327,7 +371,15 @@ function renderPair() {
       <div><span class="l">Balance</span><span class="v">${esc(bal >= 0 ? A.name : B.name)} surplus ${money(Math.abs(bal))}</span></div>
       <div><span class="l">Weight in each other's exports</span><span class="v">${pct1(A.exports ? 100 * ab / A.exports : null)} <span class="muted">of ${esc(A.name)}'s</span> · ${pct1(B.exports ? 100 * ba / B.exports : null)} <span class="muted">of ${esc(B.name)}'s</span></span></div>
     </div>
-    <h3>What flows each way, by sector</h3>
+    ${p.services_ab || p.services_ba ? `<div class="bd-stats compact">
+      <div><span class="l">Services ${esc(A.name)} → ${esc(B.name)}</span><span class="v">${money(p.services_ab)}</span></div>
+      <div><span class="l">Services ${esc(B.name)} → ${esc(A.name)}</span><span class="v">${money(p.services_ba)}</span></div>
+      <div><span class="l">Goods + services balance</span><span class="v">${(() => { const b2 = bal + (p.services_ab || 0) - (p.services_ba || 0); return esc(b2 >= 0 ? A.name : B.name) + " +" + money(Math.abs(b2)); })()}</span></div>
+    </div><p class="muted small" style="margin:-4px 0 12px">Services: OECD-WTO balanced estimates, ${esc(tr.data.services_year ?? "")}.</p>` : ""}
+    <h3>Goods each way since 2018</h3>
+    <div class="legend"><span><span class="sw ex"></span>${esc(A.name)} → ${esc(B.name)}</span><span><span class="sw im"></span>${esc(B.name)} → ${esc(A.name)}</span></div>
+    <div class="chart" id="tr-phist"></div>
+    <h3 style="margin-top:14px">What flows each way, by sector</h3>
     <div class="legend"><span><span class="sw ex"></span>${esc(A.name)} → ${esc(B.name)}</span><span><span class="sw im"></span>${esc(B.name)} → ${esc(A.name)}</span></div>
     <div class="b2b" role="table" aria-label="Trade by sector in both directions">
       ${rows.map((r) => `<div class="b2b-row" role="row" data-tip="${esc(r.sector)}|${r.ab}|${r.ba}">
@@ -349,6 +401,16 @@ function renderPair() {
     });
     row.addEventListener("mouseleave", trTipHide);
   });
+  renderPairHistory();
+}
+
+function renderPairHistory() {
+  const p = tr.data?.pairs[tr.pair], box = document.getElementById("tr-phist");
+  if (!p || !box) return;
+  trLines(box, [
+    { name: `${nameOf(p.a)} → ${nameOf(p.b)}`, color: "var(--ex)", points: p.ab_hist || [] },
+    { name: `${nameOf(p.b)} → ${nameOf(p.a)}`, color: "var(--im)", points: p.ba_hist || [] },
+  ], { yFmt: (v) => "$" + compact.format(v), label: `Goods trade between ${nameOf(p.a)} and ${nameOf(p.b)} by year`, short: true });
 }
 
 /* ---------- specialisation heatmap (revealed comparative advantage) ---------- */
@@ -427,4 +489,164 @@ function renderUsTariff() {
     })
     .on("mouseleave", () => { cross.style("display", "none"); dot.style("display", "none"); trTipHide(); });
   box.replaceChildren(svg.node());
+}
+
+/* ---------- generic multi-line chart (one y-axis, legend in HTML above, direct end labels) ---------- */
+function trLines(box, series, { yFmt = (v) => v, label = "", indexed = false, short = false, ref = null } = {}) {
+  series = series.filter((s) => s.points.length);
+  if (!box.clientWidth || !series.length) { if (!series.length) box.innerHTML = '<div class="empty">No history available.</div>'; return; }
+  const W = box.clientWidth, H = short ? 190 : Math.max(200, Math.min(280, W * 0.45));
+  const labelW = series.length > 2 ? 108 : 70;
+  const m = { t: 12, r: Math.min(labelW, W * 0.28), b: 26, l: 48 };
+  const xs = [...new Set(series.flatMap((s) => s.points.map((p) => p[0])))].sort((a, b) => a - b);
+  const x = d3.scaleLinear().domain(d3.extent(xs)).range([m.l, W - m.r]);
+  const vals = series.flatMap((s) => s.points.map((p) => p[1]));
+  const lo = indexed ? Math.min(...vals, ref ?? Infinity) : 0;
+  const y = d3.scaleLinear().domain([indexed ? Math.floor(lo / 10) * 10 : 0, Math.max(...vals, ref ?? 0)]).nice().range([H - m.b, m.t]);
+  const svg = d3.create("svg").attr("viewBox", `0 0 ${W} ${H}`).attr("role", "img").attr("aria-label", label);
+  svg.append("g").attr("class", "grid").selectAll("line").data(y.ticks(4)).join("line").attr("x1", m.l).attr("x2", W - m.r).attr("y1", y).attr("y2", y);
+  svg.append("g").attr("class", "yax").selectAll("text").data(y.ticks(4)).join("text").attr("x", m.l - 6).attr("y", (v) => y(v) + 4).attr("text-anchor", "end").text(yFmt);
+  const step = Math.ceil(xs.length / Math.max(2, Math.floor((W - m.l - m.r) / 48)));
+  svg.append("g").attr("class", "xax").selectAll("text").data(xs.filter((_, i) => i % step === 0 || i === xs.length - 1)).join("text")
+    .attr("x", x).attr("y", H - 7).attr("text-anchor", "middle").text((v) => v);
+  if (ref != null) svg.append("line").attr("class", "ref").attr("x1", m.l).attr("x2", W - m.r).attr("y1", y(ref)).attr("y2", y(ref));
+  const line = d3.line().x((p) => x(p[0])).y((p) => y(p[1]));
+  // end labels, nudged apart so they don't collide
+  const ends = series.map((s) => ({ s, y: y(s.points.at(-1)[1]) })).sort((a, b) => a.y - b.y);
+  for (let i = 1; i < ends.length; i++) if (ends[i].y - ends[i - 1].y < 13) ends[i].y = ends[i - 1].y + 13;
+  for (const s of series) {
+    svg.append("path").datum(s.points).attr("class", "series").attr("stroke", s.color).attr("d", line);
+    const lp = s.points.at(-1);
+    svg.append("circle").attr("cx", x(lp[0])).attr("cy", y(lp[1])).attr("r", 3.5).attr("class", "hdot").attr("fill", s.color);
+  }
+  for (const e of ends) {
+    const lp = e.s.points.at(-1);
+    svg.append("text").attr("class", "dlabel").attr("x", x(lp[0]) + 7).attr("y", e.y + 4)
+      .text(series.length > 2 ? `${e.s.short || e.s.name} ${yFmt(lp[1])}` : yFmt(lp[1]));
+  }
+  const cross = svg.append("line").attr("class", "cross").attr("y1", m.t).attr("y2", H - m.b).style("display", "none");
+  const dots = series.map((s) => svg.append("circle").attr("r", 4.5).attr("class", "hdot").attr("fill", s.color).style("display", "none"));
+  svg.append("rect").attr("x", m.l).attr("y", m.t).attr("width", W - m.l - m.r).attr("height", H - m.t - m.b).attr("fill", "transparent")
+    .on("mousemove", (ev) => {
+      const xv = x.invert(d3.pointer(ev)[0]);
+      const xn = xs.reduce((b, v) => (Math.abs(v - xv) < Math.abs(b - xv) ? v : b), xs[0]);
+      cross.style("display", null).attr("x1", x(xn)).attr("x2", x(xn));
+      const lines = series.map((s, i) => {
+        const pt = s.points.find((p) => p[0] === xn);
+        dots[i].style("display", pt ? null : "none");
+        if (pt) dots[i].attr("cx", x(xn)).attr("cy", y(pt[1]));
+        return `<span class="sw" style="background:${s.color}"></span>${esc(s.name)}: ${pt ? yFmt(pt[1]) + (s.raw ? ` <span class="muted">(${money(s.raw.get(xn))})</span>` : "") : "—"}`;
+      });
+      trTip(`<strong>${xn}</strong><br>${lines.join("<br>")}`, ev);
+    })
+    .on("mouseleave", () => { cross.style("display", "none"); dots.forEach((d) => d.style("display", "none")); trTipHide(); });
+  box.replaceChildren(svg.node());
+}
+
+/* ---------- rerouting: China -> US vs routes through Vietnam and Mexico, indexed ---------- */
+function renderRoutes() {
+  const box = document.getElementById("tr-routechart");
+  const routes = tr.data?.routes || [];
+  if (!box || !routes.length) return;
+  const colors = ["var(--c1)", "var(--c2)", "var(--c3)", "var(--c4)", "var(--c5)"];
+  const series = routes.map((r, i) => {
+    const base = r.series[0][1];
+    return { name: `${nameOf(r.from)} → ${nameOf(r.to)}`, short: `${r.from}→${r.to}`, color: colors[i],
+             points: r.series.map(([yr, v]) => [yr, Math.round((100 * v) / base)]), raw: new Map(r.series) };
+  });
+  document.getElementById("tr-route-legend").innerHTML = series.map((s) =>
+    `<span><span class="sw" style="background:${s.color}"></span>${esc(s.name)}</span>`).join("");
+  trLines(box, series, { yFmt: (v) => String(v), indexed: true, ref: 100,
+    label: "Goods trade on five routes, indexed to the first year = 100" });
+  document.getElementById("tr-route-table").innerHTML = `<table><thead><tr><th>Route</th>${routes[0].series.map(([y]) => `<th class="num">${y}</th>`).join("")}</tr></thead>
+    <tbody>${routes.map((r) => `<tr><td>${esc(nameOf(r.from))} → ${esc(nameOf(r.to))}</td>${routes[0].series.map(([y]) => { const v = r.series.find((p) => p[0] === y); return `<td class="num">${v ? money(v[1]) : na}</td>`; }).join("")}</tr>`).join("")}</tbody></table>`;
+}
+
+/* ---------- US effective tariff by partner (Census calculated duties) ---------- */
+function renderUsPartners() {
+  const cp = tr.data?.us_partner_tariffs;
+  const el = document.getElementById("tr-uspartners");
+  if (!el) return;
+  if (!cp) { el.hidden = true; return; }
+  el.hidden = false;
+  const list = cp.partners.filter((p) => p.iso3 !== "WORLD");
+  const world = cp.partners.find((p) => p.iso3 === "WORLD");
+  if (!tr.usPartner) tr.usPartner = (list.find((p) => p.iso3 === "CHN") || list[0])?.iso3;
+  const sorted = list.slice().sort((a, b) => b.rate_12m - a.rate_12m);
+  const max = Math.max(...sorted.map((p) => p.rate_12m), world?.rate_12m || 0, 1);
+  document.getElementById("tr-usp-window").textContent = `${fmtDate(cp.window[0])} – ${fmtDate(cp.window[1])}`;
+  document.getElementById("tr-usp-bars").innerHTML = `<div class="bars">${sorted.map((p) => `
+    <button class="bar-row usp${p.iso3 === tr.usPartner ? " on" : ""}" data-us-partner="${esc(p.iso3)}" aria-pressed="${p.iso3 === tr.usPartner}">
+      <span class="bl"><span class="flag">${esc(p.flag || "")}</span> ${esc(p.name)}</span>
+      <span class="bt"><span class="bf ex" style="width:${(100 * p.rate_12m) / max}%"></span>${world ? `<span class="mark" style="left:${(100 * world.rate_12m) / max}%" title="All countries ${world.rate_12m.toFixed(1)}%"></span>` : ""}</span>
+      <span class="bp">${p.rate_12m.toFixed(1)}%</span><span class="bv">${money(p.imports_12m)}</span>
+    </button>`).join("")}</div>
+    ${world ? `<p class="caption"><span class="mark-key"></span> All countries: ${world.rate_12m.toFixed(1)}% on ${money(world.imports_12m)} of imports. Right-hand figure = US imports from that partner over 12 months.</p>` : ""}`;
+  renderUsPartnerDetail();
+}
+
+function renderUsPartnerDetail() {
+  const cp = tr.data?.us_partner_tariffs, el = document.getElementById("tr-usp-detail");
+  if (!cp || !el) return;
+  const p = cp.partners.find((x) => x.iso3 === tr.usPartner);
+  if (!p) return;
+  const table = (rows, title) => rows.length ? `<h3>${title}</h3><ol class="prod">${rows.map((x) => `
+    <li><span class="pn"><span class="hs">HS ${esc(String(x.hs).padStart(2, "0"))}</span> ${esc(x.name)}</span>
+    <span class="bt"><span class="bf im" style="width:${Math.min(100, x.rate * 2)}%"></span></span>
+    <span class="bp">${x.rate == null ? na : x.rate.toFixed(1) + "%"}</span><span class="bv">${money(x.duty)}</span></li>`).join("")}</ol>` : "";
+  el.innerHTML = `<h3>${esc(p.flag || "")} ${esc(p.name)}: ${p.rate_12m.toFixed(1)}% on ${money(p.imports_12m)} <span class="muted">(duty ${money(p.duty_12m)})</span></h3>
+    <div class="chart" id="tr-usp-chart"></div>
+    <div class="two" style="margin-top:12px">
+      <div>${table(p.products_by_duty, "Products paying the most duty <span class=\"muted\">(rate · duty paid)</span>")}</div>
+      <div>${table(p.products_highest_rate, "Highest-rate products <span class=\"muted\">(main imports only)</span>")}</div>
+    </div>`;
+  const box = document.getElementById("tr-usp-chart");
+  const pts = p.monthly.filter((m) => m[1] != null).map(([mo, r], i) => [i, r]);
+  const labels = p.monthly.filter((m) => m[1] != null).map((m) => m[0]);
+  if (!box.clientWidth || !pts.length) return;
+  // reuse trLines with a month index on x; relabel ticks afterwards
+  trLines(box, [{ name: `US tariff on ${p.name}`, color: "var(--ex)", points: pts }],
+    { yFmt: (v) => (+v).toFixed(v < 10 ? 1 : 0) + "%", label: `Monthly US effective tariff on goods from ${p.name}`, short: true });
+  box.querySelectorAll(".xax text").forEach((t) => { const lb = labels[+t.textContent]; if (lb) t.textContent = fmtDate(lb); });
+  const svg = box.querySelector("svg");
+  svg?.addEventListener("mousemove", () => {
+    const tip = document.getElementById("tip"), strong = tip.querySelector("strong");
+    if (strong && labels[+strong.textContent] !== undefined) strong.textContent = fmtDate(labels[+strong.textContent]);
+  });
+}
+
+/* ---------- hooks for other tabs ---------- */
+// Country detail dialog (app.js): link to this country's trade profile.
+function tradeLinkFor(iso3) {
+  if (!tr.E[iso3]) return "";
+  return `<p class="bank-link"><button class="linkbtn" onclick="openTradeProfile('${esc(iso3)}')">See ${esc(tr.E[iso3].name)}'s trade profile, partners and tariffs →</button></p>`;
+}
+function openTradeProfile(iso3) {
+  const d = document.getElementById("detail");
+  showTab("trade", iso3);
+  if (d.open) d.close();
+  selectCountry(iso3, true);
+}
+
+// Central banks tab: how exposed the bank's economies are to US tariffs (exports to the US x US tariff on them).
+// Returns "" when there is nothing to say. isoList = ISO3 codes the bank covers.
+function tariffNoteFor(isoList) {
+  if (!tr.data) return "";
+  const es = isoList.map((i) => tr.E[i]).filter(Boolean);
+  if (!es.length) return "";
+  const cp = tr.data.us_partner_tariffs?.partners || [];
+  const rateOf = (iso) => cp.find((p) => p.iso3 === iso)?.rate_12m;
+  const isEu = es.length > 1 || tr.data.eu27.includes(es[0].iso3);
+  const usShare = es.reduce((s, e) => s + (e.export_bloc_share?.USA || 0) * e.exports, 0) / es.reduce((s, e) => s + e.exports, 0);
+  const rate = isEu ? rateOf("EU") : rateOf(es[0].iso3);
+  if (es[0].iso3 === "USA") {
+    const w = cp.find((p) => p.iso3 === "WORLD");
+    return w ? `<p><strong>Tariffs:</strong> US duties average ${w.rate_12m.toFixed(1)}% of imports over the last 12 months. Tariffs raise import prices directly (a one-off level shift in inflation) and can slow growth, which pulls the Fed in opposite directions.
+      <button class="linkbtn" onclick="openTradeProfile('USA')">Trade profile →</button></p>` : "";
+  }
+  if (!usShare) return "";
+  const name = isEu ? "the euro area's members here" : es[0].name;
+  return `<p><strong>Tariffs:</strong> ${usShare.toFixed(0)}% of ${esc(name)}'s goods exports go to the US${rate != null ? `, which charges about ${rate.toFixed(1)}% on them` : ""}.
+    ${usShare >= 20 ? "That is a large exposure: US tariffs weigh on growth and exporters' prices, which usually pushes this bank towards easier policy." : "The direct exposure is modest; retaliation or a weaker currency would matter more for import prices."}
+    <button class="linkbtn" onclick="openTradeProfile('${esc(es[0].iso3)}')">Trade profile →</button></p>`;
 }

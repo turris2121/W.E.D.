@@ -27,8 +27,11 @@ import time
 # Configuration
 # --------------------------------------------------------------------------- #
 ECONOMIES = ["USA", "CHN", "DEU", "JPN", "IND", "GBR", "FRA", "ITA",
-             "CAN", "BRA", "RUS", "KOR", "MEX", "AUS", "ESP"]
-NON_REPORTING = {"RUS"}  # mirror data only
+             "CAN", "BRA", "RUS", "KOR", "MEX", "AUS", "ESP",
+             "NLD", "SAU", "VNM"]  # NLD: Europe's main port; SAU: energy; VNM: China+1 supply chains
+NON_REPORTING = {"RUS", "VNM"}  # no recent Comtrade reports: mirror data (what partners report)
+HIST_START = 2018                # trends start the year the US-China tariffs began
+SCHEMA = 2                       # bump to force a re-download of cached reporters
 EU27 = {"AUT", "BEL", "BGR", "HRV", "CYP", "CZE", "DNK", "EST", "FIN", "FRA", "DEU", "GRC",
         "HUN", "IRL", "ITA", "LVA", "LTU", "LUX", "MLT", "NLD", "POL", "PRT", "ROU", "SVK",
         "SVN", "ESP", "SWE"}
@@ -44,6 +47,22 @@ WB = "https://api.worldbank.org/v2/country/{iso}/indicator/{ind}"
 OECD_CIT = ("https://sdmx.oecd.org/public/rest/data/OECD.CTP.TPS,DSD_TAX_CIT@DF_CIT,/"
             "{areas}.A.CIT........")
 TREASURY = "https://api.fiscaldata.treasury.gov/services/api/fiscal_service/v1/accounting/mts/mts_table_4"
+BATIS = "https://sdmx.oecd.org/public/rest/data/OECD.SDD.TPS,DSD_BATIS@DF_BATIS,/{key}"
+CENSUS = "https://api.census.gov/data/timeseries/intltrade/imports/hs"
+CENSUS_KEY = os.environ.get("CENSUS_KEY", "").strip()
+
+SERVICE_TYPES = {
+    "SC": "Transport", "SD": "Travel & tourism", "SE": "Construction", "SF": "Insurance & pensions",
+    "SG": "Financial services", "SH": "Royalties & licences (IP)", "SI": "Telecom, computer & IT",
+    "SJ": "Other business services", "SK": "Culture & recreation", "SA": "Processing for others",
+    "SB": "Maintenance & repair", "SL": "Government services",
+}
+# Census country names for the economies here (plus the EU aggregate and Taiwan).
+CENSUS_NAMES = {"CHINA": "CHN", "MEXICO": "MEX", "CANADA": "CAN", "GERMANY": "DEU", "JAPAN": "JPN",
+                "INDIA": "IND", "UNITED KINGDOM": "GBR", "FRANCE": "FRA", "ITALY": "ITA", "BRAZIL": "BRA",
+                "RUSSIA": "RUS", "KOREA, SOUTH": "KOR", "SOUTH KOREA": "KOR", "AUSTRALIA": "AUS", "SPAIN": "ESP",
+                "NETHERLANDS": "NLD", "SAUDI ARABIA": "SAU", "VIETNAM": "VNM", "TAIWAN": "TWN",
+                "SWITZERLAND": "CHE", "IRELAND": "IRL", "THAILAND": "THA", "EUROPEAN UNION": "EU"}
 
 TAX_INDICATORS = {
     "tariff_weighted": "TM.TAX.MRCH.WM.AR.ZS",      # applied, trade-weighted mean, all products
@@ -149,6 +168,8 @@ def comtrade(session, freq: str, period: str, reporter: int, flow: str,
     if wait > 0:
         time.sleep(wait)
     params = {"reporterCode": reporter, "period": period, "cmdCode": cmd, "flowCode": flow}
+    if COMTRADE_KEY:  # the full API returns every customs-procedure / transport-mode split unless asked for totals
+        params.update({"motCode": 0, "customsCode": "C00", "partner2Code": 0})
     if partners is not None:
         params["partnerCode"] = ",".join(map(str, partners))
     try:
@@ -209,7 +230,7 @@ def fetch_trade(session, prev: dict | None = None) -> dict:
     REFRESH_DAYS are kept as they are. If Comtrade's quota runs out, the economies
     fetched so far are returned with complete=False and the next run continues."""
     prev = prev or {}
-    if prev.get("codes") and prev.get("partner_iso"):
+    if prev.get("codes") and prev.get("partner_iso") and all(e in prev["codes"] for e in ECONOMIES):
         iso_to_code, partner_iso = prev["codes"], prev["partner_iso"]
     else:
         iso_to_code, partner_iso = _reference(session)
@@ -217,18 +238,27 @@ def fetch_trade(session, prev: dict | None = None) -> dict:
     today = dt.date.today()
     out = {"codes": iso_to_code, "partner_iso": partner_iso, "reporters": dict(prev.get("reporters") or {})}
     set_codes = [iso_to_code[e] for e in ECONOMIES]
-    rus = iso_to_code["RUS"]
+    mirror_codes = [iso_to_code[e] for e in ECONOMIES if e in NON_REPORTING]
 
     def fresh(rec):
+        if rec.get("v") != SCHEMA:
+            return False
         try:
             return (today - dt.date.fromisoformat(rec.get("fetched", "1900-01-01"))).days < REFRESH_DAYS
         except ValueError:
             return False
 
     todo = [e for e in ECONOMIES if e not in NON_REPORTING and not (e in out["reporters"] and fresh(out["reporters"][e]))]
+    failed = []
     try:
         for iso in todo:
-            _fetch_reporter(session, out, iso, iso_to_code, set_codes, rus, this_year, today)
+            try:
+                _fetch_reporter(session, out, iso, iso_to_code, set_codes, mirror_codes, this_year, today)
+            except QuotaExceeded:
+                raise
+            except Exception as e:  # noqa: BLE001 - one economy failing must not lose the others
+                failed.append(iso)
+                print(f"    trade: {iso} failed ({str(e)[:200]}); will retry next run", flush=True)
     except QuotaExceeded as e:
         print(f"    trade: {e}; keeping {len(out['reporters'])} economies, will resume next run", flush=True)
         if not out["reporters"]:
@@ -237,7 +267,15 @@ def fetch_trade(session, prev: dict | None = None) -> dict:
     return out
 
 
-def _fetch_reporter(session, out, iso, iso_to_code, set_codes, rus, this_year, today):
+def _hist(rows) -> dict:
+    """{year: {partnerCode: value}}, partner "0" = world."""
+    out = {}
+    for r in rows:
+        out.setdefault(str(r["period"]), {})[str(r["partnerCode"])] = round(r["primaryValue"])
+    return out
+
+
+def _fetch_reporter(session, out, iso, iso_to_code, set_codes, mirror_codes, this_year, today):
     code = iso_to_code[iso]
     # Latest year this economy has reported (annual data lags ~6-10 months).
     year = None
@@ -248,13 +286,24 @@ def _fetch_reporter(session, out, iso, iso_to_code, set_codes, rus, this_year, t
     if year is None:
         raise RuntimeError(f"No recent Comtrade data for {iso}")
     others = [c for c in set_codes if c != code]
-    rec = {"year": year, "fetched": today.isoformat()}
+    rec = {"v": SCHEMA, "year": year, "fetched": today.isoformat()}
     rec["exports_by_chapter"] = _by_chapter(comtrade(session, "A", str(year), code, "X", "AG2", [0]))
     rec["imports_by_chapter"] = _by_chapter(comtrade(session, "A", str(year), code, "M", "AG2", [0]))
-    rec["exports_by_partner"] = _by_partner(comtrade(session, "A", str(year), code, "X"))
-    rec["imports_by_partner"] = _by_partner(comtrade(session, "A", str(year), code, "M"))
-    rec["exports_by_partner_prev"] = _by_partner(comtrade(session, "A", str(year - 1), code, "X"))
-    rec["imports_by_partner_prev"] = _by_partner(comtrade(session, "A", str(year - 1), code, "M"))
+    # Totals by partner for every year since HIST_START (one call per flow with a key;
+    # the keyless preview allows one period per call, so it only gets this year and last).
+    years = list(range(HIST_START, year + 1)) if COMTRADE_KEY else [year - 1, year]
+    for flow, key in (("X", "exports_hist"), ("M", "imports_hist")):
+        h = {}
+        n = 4 if COMTRADE_KEY else 1  # years per call (stays well under the row cap)
+        for i in range(0, len(years), n):
+            h.update(_hist(comtrade(session, "A", ",".join(map(str, years[i:i + n])), code, flow)))
+        rec[key] = h
+    cur, prv = rec["exports_hist"].get(str(year), {}), rec["exports_hist"].get(str(year - 1), {})
+    rec["exports_by_partner"] = {k: v for k, v in cur.items() if k != "0"}
+    rec["exports_by_partner_prev"] = {k: v for k, v in prv.items() if k != "0"}
+    cur, prv = rec["imports_hist"].get(str(year), {}), rec["imports_hist"].get(str(year - 1), {})
+    rec["imports_by_partner"] = {k: v for k, v in cur.items() if k != "0"}
+    rec["imports_by_partner_prev"] = {k: v for k, v in prv.items() if k != "0"}
     # What it sells to each of the other major economies, by HS chapter
     # (one call with a key; 4 partners per call on the 500-row preview).
     to = {}
@@ -264,8 +313,12 @@ def _fetch_reporter(session, out, iso, iso_to_code, set_codes, rus, this_year, t
             if str(r["cmdCode"]).isdigit():
                 to.setdefault(str(r["partnerCode"]), {})[str(int(r["cmdCode"]))] = round(r["primaryValue"])
     rec["exports_to_majors_by_chapter"] = to
-    # Mirror data for Russia: what this economy buys from Russia, by chapter.
-    rec["imports_from_rus_by_chapter"] = _by_chapter(comtrade(session, "A", str(year), code, "M", "AG2", [rus]))
+    # Mirror data for non-reporting economies: what this economy buys from them, by chapter.
+    mir = {}
+    for r in comtrade(session, "A", str(year), code, "M", "AG2", [c for c in mirror_codes if c != code]):
+        if str(r["cmdCode"]).isdigit():
+            mir.setdefault(str(r["partnerCode"]), {})[str(int(r["cmdCode"]))] = round(r["primaryValue"])
+    rec["imports_from_mirror_by_chapter"] = mir
     out["reporters"][iso] = rec
     print(f"    trade: {iso} {year} ok", flush=True)
     return out
@@ -332,6 +385,97 @@ def fetch_us_customs(session, prev: dict | None) -> dict:
     return {"duties": duties, "refunds": refunds, "imports": imports}
 
 
+def fetch_services(session) -> dict:
+    """Services trade (OECD-WTO BaTIS, balanced estimates, US$ millions).
+    1) total services exports/imports between the economies here and with the world;
+    2) services exports to the world by type."""
+    areas = "+".join(ECONOMIES)
+    rows = []
+    start = dt.date.today().year - 5
+    for key in (f"{areas}.{areas}+W.X+M.S.S.A..B", f"{areas}.W.X+M.S.{'+'.join(SERVICE_TYPES)}.A..B"):
+        text = _get(session, BATIS.format(key=key), params={"startPeriod": start, "format": "csv"},
+                    as_json=False, timeout=180)
+        for r in csv.DictReader(io.StringIO(text)):
+            if r.get("OBS_VALUE"):
+                mult = 10 ** int(r.get("UNIT_MULT") or 0)
+                rows.append([r["REF_AREA"], r["COUNTERPART_AREA"], r["TRADE_FLOW"], r["SERVICE"],
+                             int(r["TIME_PERIOD"]), round(float(r["OBS_VALUE"]) * mult)])
+    if not rows:
+        raise RuntimeError("OECD BaTIS returned no services data")
+    return {"rows": rows}
+
+
+def _census(session, params: dict) -> list[dict]:
+    """One Census call; returns rows as dicts. The key never appears in errors (they end up in meta.json)."""
+    try:
+        r = session.get(CENSUS, params={**params, "key": CENSUS_KEY}, timeout=180)
+        if r.status_code == 204:  # no data for this query
+            return []
+        r.raise_for_status()
+        rows = r.json()
+    except Exception as e:  # noqa: BLE001
+        raise RuntimeError(("Census: " + str(e)).replace(CENSUS_KEY, "***")[:300]) from None
+    head = rows[0]
+    return [dict(zip(head, x)) for x in rows[1:]]
+
+
+def _f(v):
+    try:
+        return float(v)
+    except (TypeError, ValueError):
+        return None
+
+
+def fetch_census(session) -> dict:
+    """US imports and calculated duties by country (monthly) and by country x HS chapter (last 12 months).
+    Calculated duty = duty owed on imports for consumption, estimated by Census from the tariff rates
+    in force; it does not net out later refunds."""
+    if not CENSUS_KEY:
+        raise RuntimeError("CENSUS_KEY not set")
+    today = dt.date.today()
+    start = f"{today.year - 2}-{today.month:02d}"
+    totals = _census(session, {"get": "CTY_CODE,CTY_NAME,CON_VAL_MO,CAL_DUT_MO", "time": f"from {start}"})
+    if not totals:
+        raise RuntimeError("Census returned no data")
+    countries, months = {}, set()
+    for r in totals:
+        name = (r.get("CTY_NAME") or "").strip().upper()
+        code = (r.get("CTY_CODE") or "").strip()
+        iso = "WORLD" if name.startswith("TOTAL FOR ALL") else CENSUS_NAMES.get(name)
+        val, duty = _f(r.get("CON_VAL_MO")), _f(r.get("CAL_DUT_MO"))
+        if not iso or val is None or duty is None:
+            continue
+        mo = r["time"][:7]
+        months.add(mo)
+        c = countries.setdefault(iso, {"code": code, "name": name, "monthly": {}})
+        c["monthly"][mo] = [round(val), round(duty)]
+    months = sorted(months)
+    if not months:
+        raise RuntimeError("Census totals had no usable rows")
+    last = months[-1]
+    first12 = months[-12] if len(months) >= 12 else months[0]
+    products = {}
+    for iso, c in countries.items():
+        params = {"get": "I_COMMODITY,I_COMMODITY_SDESC,CON_VAL_MO,CAL_DUT_MO", "COMM_LVL": "HS2",
+                  "time": f"from {first12} to {last}"}
+        params["CTY_CODE"] = c["code"] if iso != "WORLD" else "-"
+        try:
+            rows = _census(session, params)
+        except RuntimeError as e:
+            print(f"    census: products for {iso} unavailable ({e})", flush=True)
+            continue
+        agg = {}
+        for r in rows:
+            hs, val, duty = (r.get("I_COMMODITY") or "").strip(), _f(r.get("CON_VAL_MO")), _f(r.get("CAL_DUT_MO"))
+            if not hs.isdigit() or val is None or duty is None:
+                continue
+            a = agg.setdefault(str(int(hs)), [0, 0])
+            a[0] += val
+            a[1] += duty
+        products[iso] = {k: [round(v[0]), round(v[1])] for k, v in agg.items()}
+    return {"months": months, "product_window": [first12, last], "countries": countries, "products": products}
+
+
 # --------------------------------------------------------------------------- #
 # Build site/data/trade.json
 # --------------------------------------------------------------------------- #
@@ -359,14 +503,16 @@ def _pct(a, b):
     return round(100 * (a - b) / b, 1) if a is not None and b else None
 
 
-def build_trade(raw: dict, tariffs: dict | None, customs: dict | None, countries: list[dict]) -> dict:
+def build_trade(raw: dict, tariffs: dict | None, customs: dict | None, countries: list[dict],
+                services: dict | None = None, census: dict | None = None) -> dict:
     by_iso = {c["iso3"]: c for c in countries}
     codes = raw["codes"]
     code_iso = {str(v): k for k, v in codes.items()}
     piso = raw["partner_iso"]
     reps = raw["reporters"]
     # Economies we can show: those fetched so far, plus mirror-only ones once any partner is in.
-    ECON = [e for e in ECONOMIES if e in reps or (e in NON_REPORTING and reps)]
+    # (Skips economies the cache has no Comtrade code for, e.g. ones added since the last download.)
+    ECON = [e for e in ECONOMIES if str(codes.get(e, "")) and (e in reps or (e in NON_REPORTING and reps))]
 
     def pname(code: str):
         iso = (piso.get(code) or [None])[0]
@@ -385,7 +531,7 @@ def build_trade(raw: dict, tariffs: dict | None, customs: dict | None, countries
             if a in NON_REPORTING:
                 if b in reps:
                     matrix[a][b] = reps[b]["imports_by_partner"].get(str(codes[a]))
-                    flows_by_chapter[a][b] = reps[b]["imports_from_rus_by_chapter"]
+                    flows_by_chapter[a][b] = reps[b].get("imports_from_mirror_by_chapter", {}).get(str(codes[a]), {})
             else:
                 matrix[a][b] = reps[a]["exports_by_partner"].get(str(codes[b]))
                 flows_by_chapter[a][b] = reps[a]["exports_to_majors_by_chapter"].get(str(codes[b]), {})
@@ -400,7 +546,7 @@ def build_trade(raw: dict, tariffs: dict | None, customs: dict | None, countries
             ex_ch, im_ch = {}, {}
             ex_p, im_p = {}, {}
             for b, r in reps.items():
-                for ch, v in r["imports_from_rus_by_chapter"].items():
+                for ch, v in r.get("imports_from_mirror_by_chapter", {}).get(str(codes[iso]), {}).items():
                     ex_ch[ch] = ex_ch.get(ch, 0) + v
                 for ch, v in r["exports_to_majors_by_chapter"].get(str(codes[iso]), {}).items():
                     im_ch[ch] = im_ch.get(ch, 0) + v
@@ -501,12 +647,119 @@ def build_trade(raw: dict, tariffs: dict | None, customs: dict | None, countries
                                  "ab_change_pct": _pct(ab, prev(a, b)), "ba_change_pct": _pct(ba, prev(b, a)),
                                  "total": (ab or 0) + (ba or 0)}
 
+    # ---- history (2018 -> latest) for each economy and each pair
+    def flow_hist(x, y):
+        """{year: value} of goods x exports to y."""
+        if x in NON_REPORTING:
+            h = reps.get(y, {}).get("imports_hist", {})
+            return {yr: d.get(str(codes[x])) for yr, d in h.items() if d.get(str(codes[x]))}
+        h = reps[x].get("exports_hist", {})
+        return {yr: d.get(str(codes[y])) for yr, d in h.items() if d.get(str(codes[y]))}
+
+    for e in econ:
+        iso = e["iso3"]
+        if iso in NON_REPORTING:
+            ex, im = {}, {}
+            for b, r in reps.items():
+                for yr, d in r.get("imports_hist", {}).items():
+                    if d.get(str(codes[iso])):
+                        ex[yr] = ex.get(yr, 0) + d[str(codes[iso])]
+                for yr, d in r.get("exports_hist", {}).items():
+                    if d.get(str(codes[iso])):
+                        im[yr] = im.get(yr, 0) + d[str(codes[iso])]
+        else:
+            ex = {yr: d.get("0") for yr, d in reps[iso].get("exports_hist", {}).items() if d.get("0")}
+            im = {yr: d.get("0") for yr, d in reps[iso].get("imports_hist", {}).items() if d.get("0")}
+        e["history"] = [{"year": int(yr), "exports": ex.get(yr), "imports": im.get(yr)} for yr in sorted(set(ex) | set(im))]
+    for p in pairs.values():
+        p["ab_hist"] = sorted([int(k), v] for k, v in flow_hist(p["a"], p["b"]).items())
+        p["ba_hist"] = sorted([int(k), v] for k, v in flow_hist(p["b"], p["a"]).items())
+
+    routes = []
+    for x, y in (("CHN", "USA"), ("CHN", "VNM"), ("VNM", "USA"), ("CHN", "MEX"), ("MEX", "USA")):
+        if x in ECON and y in ECON:
+            h = sorted([int(k), v] for k, v in flow_hist(x, y).items())
+            if len(h) >= 2:
+                routes.append({"from": x, "to": y, "series": h})
+
     us = build_us_tariff(customs)
     group = {"sectors": _shares(group_exports_by_sector, g_total, None, "sector"), "exports": g_total}
-    out = {"complete": bool(raw.get("complete")) and len(ECON) == len(ECONOMIES), "economies": econ, "matrix": matrix, "pairs": pairs, "us_tariff": us, "group": group,
+    svc = build_services(services, ECON)
+    for e in econ:
+        e["services"] = svc["by_economy"].get(e["iso3"]) if svc else None
+    if svc:
+        for p in pairs.values():
+            p["services_ab"] = svc["bilateral"].get((p["a"], p["b"]))
+            p["services_ba"] = svc["bilateral"].get((p["b"], p["a"]))
+    out = {"complete": bool(raw.get("complete")) and len(ECON) == len(ECONOMIES), "economies": econ,
+           "matrix": matrix, "pairs": pairs, "us_tariff": us, "group": group, "routes": routes,
+           "us_partner_tariffs": build_census(census, by_iso),
+           "services_year": svc["year"] if svc else None,
            "sector_order": SECTOR_ORDER, "eu27": sorted(EU27)}
     out["insights"] = insights(out)
     return out
+
+
+def build_services(services: dict | None, econ: list[str]):
+    if not services:
+        return None
+    rows = services["rows"]
+    # latest year with world totals for most economies
+    years = {}
+    for ref, cp, flow, svc, yr, v in rows:
+        if cp == "W" and svc == "S" and flow == "X":
+            years[yr] = years.get(yr, 0) + 1
+    if not years:
+        return None
+    year = max(y for y, n in years.items() if n >= len(econ) * 0.6) if any(n >= len(econ) * 0.6 for n in years.values()) else max(years)
+    val = {}
+    for ref, cp, flow, svc, yr, v in rows:
+        if yr == year:
+            val[(ref, cp, flow, svc)] = v
+    by_economy, bilateral = {}, {}
+    for a in econ:
+        x, m = val.get((a, "W", "X", "S")), val.get((a, "W", "M", "S"))
+        if x is None:
+            continue
+        types = sorted(((SERVICE_TYPES[k], val[(a, "W", "X", k)]) for k in SERVICE_TYPES if val.get((a, "W", "X", k))),
+                       key=lambda t: -t[1])
+        partners = sorted(((b, val[(a, b, "X", "S")]) for b in econ if b != a and val.get((a, b, "X", "S"))),
+                          key=lambda t: -t[1])
+        by_economy[a] = {"year": year, "exports": x, "imports": m, "balance": (x - m) if m is not None else None,
+                         "types": [{"name": n, "value": v, "share": round(100 * v / x, 2)} for n, v in types],
+                         "partners": [{"iso3": b, "value": v, "share": round(100 * v / x, 2)} for b, v in partners[:8]]}
+        for b in econ:
+            if b != a and val.get((a, b, "X", "S")):
+                bilateral[(a, b)] = val[(a, b, "X", "S")]
+    return {"year": year, "by_economy": by_economy, "bilateral": bilateral}
+
+
+def build_census(census: dict | None, by_iso: dict):
+    if not census or not census.get("countries"):
+        return None
+    months = census["months"]
+    last12 = months[-12:]
+    out = []
+    for iso, c in census["countries"].items():
+        m = c["monthly"]
+        imp = sum(m[mo][0] for mo in last12 if mo in m)
+        duty = sum(m[mo][1] for mo in last12 if mo in m)
+        if not imp:
+            continue
+        country = by_iso.get(iso, {})
+        name = {"WORLD": "All countries", "EU": "European Union"}.get(iso) or SHORT_NAMES.get(iso) or country.get("name") or c["name"].title()
+        prods = census.get("products", {}).get(iso, {})
+        plist = [{"hs": k, "name": HS_CHAPTERS.get(int(k), "HS " + k), "imports": v[0], "duty": v[1],
+                  "rate": round(100 * v[1] / v[0], 2) if v[0] else None} for k, v in prods.items() if v[0] > 0]
+        top_by_duty = sorted(plist, key=lambda x: -x["duty"])[:10]
+        big = [x for x in plist if x["imports"] >= max(1e9 if iso == "WORLD" else 2e8, 0.005 * imp)]
+        highest = sorted(big, key=lambda x: -(x["rate"] or 0))[:8]
+        out.append({"iso3": iso, "name": name, "flag": {"EU": "🇪🇺"}.get(iso, country.get("flag")),
+                    "imports_12m": imp, "duty_12m": duty, "rate_12m": round(100 * duty / imp, 2),
+                    "monthly": [[mo, round(100 * m[mo][1] / m[mo][0], 2) if m[mo][0] else None] for mo in months if mo in m],
+                    "products_by_duty": top_by_duty, "products_highest_rate": highest})
+    out.sort(key=lambda x: -x["imports_12m"])
+    return {"window": [last12[0], last12[-1]], "product_window": census.get("product_window"), "partners": out}
 
 
 def build_us_tariff(customs: dict | None):
@@ -661,6 +914,38 @@ def insights(t: dict) -> list[dict]:
             txt += f". Refunds to importers were unusually large: {_money(us['refunds_12m'])} in the last 12 months, " \
                    f"peaking at {_money(big['refunds'])} in {_month(big['month'])}"
         out.append({"kind": "tariff", "title": "The US effective tariff rate", "text": txt + ".", "link": "us-tariff"})
+    # Rerouting: compare the first and last year of the China->US, China->Vietnam, Vietnam->US routes.
+    R = {(r["from"], r["to"]): r["series"] for r in t.get("routes", [])}
+    def growth(k):
+        s_ = R.get(k)
+        return (s_[0][0], s_[-1][0], _pct(s_[-1][1], s_[0][1])) if s_ and len(s_) >= 2 else None
+    cu, cv, vu, mu = (growth(k) for k in (("CHN", "USA"), ("CHN", "VNM"), ("VNM", "USA"), ("MEX", "USA")))
+    if cu and cv and vu:
+        out.append({"kind": "shift", "title": "Trade routed around the tariffs",
+                    "text": f"From {cu[0]} to {cu[1]}, China's direct exports to the US changed {cu[2]:+.0f}%, while China's exports "
+                            f"to Vietnam changed {cv[2]:+.0f}% and Vietnam's exports to the US {vu[2]:+.0f}%"
+                            + (f" (Mexico→US {mu[2]:+.0f}%)" if mu else "") +
+                            ". That pattern is consistent with part of China–US trade being assembled in, or routed through, third countries.", "link": "routes"})
+    cp = t.get("us_partner_tariffs")
+    if cp:
+        ps = [x for x in cp["partners"] if x["iso3"] not in ("WORLD", "EU", "TWN", "CHE", "IRL", "THA") and x["imports_12m"] > 1e10]
+        if len(ps) >= 3:
+            hi_, lo_ = max(ps, key=lambda x: x["rate_12m"]), min(ps, key=lambda x: x["rate_12m"])
+            w = next((x for x in cp["partners"] if x["iso3"] == "WORLD"), None)
+            out.append({"kind": "tariff", "title": "Who pays the highest US tariffs",
+                        "text": f"Over the last 12 months, US duties averaged {hi_['rate_12m']:.1f}% on goods from {hi_['name']} "
+                                f"and {lo_['rate_12m']:.1f}% on goods from {lo_['name']}"
+                                + (f" (all countries {w['rate_12m']:.1f}%)" if w else "") + ". Census calculated duties.",
+                        "link": "us-partners"})
+    sv = [e for e in t["economies"] if e.get("services") and e["services"].get("balance") is not None]
+    if sv:
+        top_ = max(sv, key=lambda e: e["services"]["balance"])
+        low_ = min(sv, key=lambda e: e["services"]["balance"])
+        out.append({"kind": "balance", "title": "Services change the picture",
+                    "text": f"{top_['name']} has the largest services surplus ({_money(top_['services']['balance'])}, "
+                            f"{top_['services']['year']}), offsetting part of its goods position; "
+                            f"{low_['name']} has the largest services deficit ({_money(low_['services']['balance'])}).",
+                    "link": f"country/{top_['iso3']}"})
     tw = [(e["taxes"]["tariff_weighted"]["value"], e) for e in t["economies"] if e["taxes"].get("tariff_weighted")]
     if tw:
         tw.sort(key=lambda x: x[0])

@@ -310,6 +310,7 @@ function openDetail(iso3) {
       ${chambers}${elections}
     </div>
     ${typeof bankLinkFor === "function" ? bankLinkFor(c.iso3) : ""}
+    ${typeof tradeLinkFor === "function" ? tradeLinkFor(c.iso3) : ""}
     ${c.wikidata ? `<p class="muted" style="margin-top:12px">Political data: <a href="${esc(c.wikidata)}" target="_blank" rel="noopener">Wikidata</a>. Spot an error? Add a correction in <code>scripts/overrides.json</code>.</p>` : ""}`;
   history.replaceState(null, "", "#" + c.iso3);
   const d = $("#detail");

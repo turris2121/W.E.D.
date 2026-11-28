@@ -348,6 +348,19 @@ button.prow .pn { color: var(--accent); }
 .chg span[aria-hidden] { font-size: 9px; }
 .tax-cards { margin-top: 0; margin-bottom: 12px; }
 .warn-note { color: var(--warn); border-color: var(--warn); }
+/* categorical slots (validated reference order) for the routes chart */
+:root { --c1: #257de0; --c2: #f47230; --c3: #00b894; --c4: #f2a600; --c5: #ee7fac; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --c1: #338ced; --c2: #e76624; --c3: #00a888; --c4: #d28e05; --c5: #e24d8b; } }
+:root[data-theme="dark"] { --c1: #338ced; --c2: #e76624; --c3: #00a888; --c4: #d28e05; --c5: #e24d8b; }
+.bd-stats.compact { grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); }
+.bd-stats.compact .v { font-size: 15px; }
+button.bar-row.usp { font: inherit; color: inherit; background: none; border: 0; border-radius: 6px; padding: 3px 4px; cursor: pointer; text-align: left; width: 100%; }
+button.bar-row.usp:hover { background: var(--surface-2); }
+button.bar-row.usp.on { background: var(--surface-2); box-shadow: inset 3px 0 0 var(--accent); }
+.bt { position: relative; }
+.bt .mark, .mark-key { position: absolute; top: -2px; bottom: -2px; width: 2px; background: var(--text); border-radius: 1px; }
+.mark-key { position: static; display: inline-block; height: 12px; vertical-align: -2px; margin-right: 4px; }
+details summary { cursor: pointer; color: var(--accent); }
 
 /* heatmaps */
 table.heat { border-collapse: separate; border-spacing: 2px; width: auto; }

@@ -45,6 +45,8 @@ MAX_AGE_HOURS = {
     "trade": 24,           # daily check; trade.py only re-downloads economies older than 30 days
     "tariffs": 24 * 7,
     "us_customs": 24,
+    "services": 24 * 7,
+    "census": 24,
     "labour": 24 * 7,      # ILOSTAT updates monthly at most; weekly is plenty
 }
 
@@ -60,6 +62,8 @@ SOURCE_URLS = {
     "trade": "https://comtradeplus.un.org",
     "tariffs": "https://data.worldbank.org + https://data-explorer.oecd.org",
     "us_customs": "https://fiscaldata.treasury.gov + https://comtradeplus.un.org",
+    "services": "https://data-explorer.oecd.org (OECD-WTO BaTIS)",
+    "census": "https://www.census.gov/foreign-trade",
     "labour": "https://ilostat.ilo.org (SDMX API)",
 }
 
@@ -343,6 +347,8 @@ FETCHERS = {
     "trade": lambda: trade.fetch_trade(SESSION, (load_cache("trade") or {}).get("data")),
     "tariffs": lambda: trade.fetch_tariffs(SESSION),
     "us_customs": lambda: trade.fetch_us_customs(SESSION, (load_cache("us_customs") or {}).get("data")),
+    "services": lambda: trade.fetch_services(SESSION),
+    "census": lambda: trade.fetch_census(SESSION),
     "labour": lambda: labour.fetch_labour(SESSION),
 }
 
@@ -876,7 +882,8 @@ def main() -> int:
         log(f"Wrote {len(banks)} central banks" + (f" (missing data: {', '.join(missing)})" if missing else ""))
 
     if src.get("trade"):
-        t = trade.build_trade(src["trade"], src.get("tariffs"), src.get("us_customs"), countries)
+        t = trade.build_trade(src["trade"], src.get("tariffs"), src.get("us_customs"), countries,
+                              src.get("services"), src.get("census"))
         (OUT / "trade.json").write_text(json.dumps(t, ensure_ascii=False, separators=(",", ":")))
         log(f"Wrote trade for {len(t['economies'])} economies, {len(t['pairs'])} pairs, {len(t['insights'])} insights")
 

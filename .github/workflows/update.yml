@@ -37,6 +37,7 @@ jobs:
       - name: Fetch data
         env:
           COMTRADE_KEY: ${{ secrets.COMTRADE_KEY }}   # optional; free key from comtradedeveloper.un.org
+          CENSUS_KEY: ${{ secrets.CENSUS_KEY }}       # optional; free key from api.census.gov/data/key_signup.html
         run: python scripts/fetch_all.py ${{ inputs.force && '--force' || '' }}
 
       - name: Commit updated data
