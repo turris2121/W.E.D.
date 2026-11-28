@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-11-27T20:34:17+00:00",
+  "generated_at": "2026-11-28T20:40:46+00:00",
   "count": 196,
   "sources": {
     "countries": {
@@ -9,23 +9,23 @@
     },
     "worldbank": {
       "url": "https://data.worldbank.org",
-      "status": "cached",
-      "fetched_at": "2026-11-27T06:57:38+00:00"
+      "status": "ok",
+      "fetched_at": "2026-11-28T20:40:46+00:00"
     },
     "fx": {
       "url": "https://www.exchangerate-api.com (open.er-api.com)",
-      "status": "cached",
-      "fetched_at": "2026-11-27T19:33:39+00:00"
+      "status": "ok",
+      "fetched_at": "2026-11-28T20:40:46+00:00"
     },
     "politics": {
       "url": "https://www.wikidata.org",
-      "status": "cached",
-      "fetched_at": "2026-11-27T06:57:38+00:00"
+      "status": "ok",
+      "fetched_at": "2026-11-28T20:40:46+00:00"
     },
     "elections": {
       "url": "https://www.wikidata.org",
-      "status": "cached",
-      "fetched_at": "2026-11-27T06:57:38+00:00"
+      "status": "ok",
+      "fetched_at": "2026-11-28T20:40:46+00:00"
     },
     "ipu": {
       "url": "https://data.ipu.org",
@@ -34,18 +34,18 @@
     },
     "bis": {
       "url": "https://data.bis.org",
-      "status": "cached",
-      "fetched_at": "2026-11-27T19:33:39+00:00"
+      "status": "ok",
+      "fetched_at": "2026-11-28T20:40:46+00:00"
     },
     "macro": {
       "url": "https://data-explorer.oecd.org + https://db.nomics.world (IMF WEO, EIA STEO) + https://data.worldbank.org",
-      "status": "cached",
-      "fetched_at": "2026-11-27T19:53:14+00:00"
+      "status": "ok",
+      "fetched_at": "2026-11-28T20:40:46+00:00"
     },
     "trade": {
       "url": "https://comtradeplus.un.org",
-      "status": "cached",
-      "fetched_at": "2026-11-27T20:16:39+00:00"
+      "status": "ok",
+      "fetched_at": "2026-11-28T20:40:46+00:00"
     },
     "tariffs": {
       "url": "https://data.worldbank.org + https://data-explorer.oecd.org",
@@ -55,7 +55,12 @@
     "us_customs": {
       "url": "https://fiscaldata.treasury.gov + https://comtradeplus.un.org",
       "status": "ok",
-      "fetched_at": "2026-11-27T20:34:17+00:00"
+      "fetched_at": "2026-11-28T20:40:46+00:00"
+    },
+    "labour": {
+      "url": "https://ilostat.ilo.org (SDMX API)",
+      "status": "cached",
+      "fetched_at": "2026-11-28T20:35:01+00:00"
     }
   },
   "coverage_percent": {
