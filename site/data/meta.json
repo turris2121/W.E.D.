@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-11-28T20:40:46+00:00",
+  "generated_at": "2026-11-28T20:56:22+00:00",
   "count": 196,
   "sources": {
     "countries": {
@@ -9,22 +9,22 @@
     },
     "worldbank": {
       "url": "https://data.worldbank.org",
-      "status": "ok",
+      "status": "cached",
       "fetched_at": "2026-11-28T20:40:46+00:00"
     },
     "fx": {
       "url": "https://www.exchangerate-api.com (open.er-api.com)",
-      "status": "ok",
+      "status": "cached",
       "fetched_at": "2026-11-28T20:40:46+00:00"
     },
     "politics": {
       "url": "https://www.wikidata.org",
-      "status": "ok",
+      "status": "cached",
       "fetched_at": "2026-11-28T20:40:46+00:00"
     },
     "elections": {
       "url": "https://www.wikidata.org",
-      "status": "ok",
+      "status": "cached",
       "fetched_at": "2026-11-28T20:40:46+00:00"
     },
     "ipu": {
@@ -34,17 +34,17 @@
     },
     "bis": {
       "url": "https://data.bis.org",
-      "status": "ok",
+      "status": "cached",
       "fetched_at": "2026-11-28T20:40:46+00:00"
     },
     "macro": {
       "url": "https://data-explorer.oecd.org + https://db.nomics.world (IMF WEO, EIA STEO) + https://data.worldbank.org",
-      "status": "ok",
+      "status": "cached",
       "fetched_at": "2026-11-28T20:40:46+00:00"
     },
     "trade": {
       "url": "https://comtradeplus.un.org",
-      "status": "ok",
+      "status": "cached",
       "fetched_at": "2026-11-28T20:40:46+00:00"
     },
     "tariffs": {
@@ -54,7 +54,7 @@
     },
     "us_customs": {
       "url": "https://fiscaldata.treasury.gov + https://comtradeplus.un.org",
-      "status": "ok",
+      "status": "cached",
       "fetched_at": "2026-11-28T20:40:46+00:00"
     },
     "labour": {
