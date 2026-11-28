@@ -231,8 +231,18 @@ function renderBankDetail() {
             <p class="muted small">Source: ${esc(b.fiscal.source || "")}.</p>` : `<p class="muted">No fiscal data available.</p>`}</div>
         <div class="card"><h3>Energy ${b.energy && b.energy.shock !== "none" ? `<span class="stance en-${esc(b.energy.shock)}">oil ${signed(b.energy.oil_change_12m, "%", 0)}</span>` : ""}</h3>
           ${b.energy ? `<p>${esc(b.energy.text)}</p>` : `<p class="muted">No energy data available.</p>`}</div>
+        <div class="card" id="bank-tariffs" hidden><h3>US tariffs and trade exposure</h3><div id="bank-tariffs-body"></div></div>
       </div>
     </details>`;
+  // Tariff note comes from trade.js (Trade tab); filled when the section is opened, so trade data has loaded.
+  const fillTariffs = () => {
+    const html = typeof tariffNoteFor === "function" ? tariffNoteFor(b.countries) : "";
+    const card = document.getElementById("bank-tariffs");
+    if (!card) return;
+    document.getElementById("bank-tariffs-body").innerHTML = html;
+    card.hidden = !html;
+  };
+  box.querySelector("details.more").addEventListener("toggle", (ev) => { if (ev.target.open) fillTariffs(); });
   drawRateChart(b);
   drawFxChart(b);
 }
