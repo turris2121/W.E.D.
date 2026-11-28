@@ -868,7 +868,7 @@ def main() -> int:
     (OUT / "meta.json").write_text(json.dumps(meta, ensure_ascii=False, indent=2))
 
     if src.get("bis"):
-        banks = monetary.build_central_banks(src["bis"], countries, src.get("macro"))
+        banks = monetary.build_central_banks(src["bis"], countries, src.get("macro"), src.get("labour"))
         (OUT / "central_banks.json").write_text(json.dumps(banks, ensure_ascii=False, separators=(",", ":")))
         if src.get("macro"):
             (OUT / "energy.json").write_text(json.dumps(src["macro"]["energy"], separators=(",", ":")))

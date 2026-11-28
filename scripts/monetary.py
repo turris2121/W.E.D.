@@ -403,7 +403,168 @@ def _inflation(bank, cpi, position, stance, strength, fiscal=None, energy=None):
     return {"direction": direction, "arrow": arrow, "text": s}
 
 
-def build_central_banks(bis: dict, countries: list[dict], macro: dict | None = None) -> list[dict]:
+# --------------------------------------------------------------------------- #
+# Rate outlook: why a bank holds, and what could make it move fast
+# --------------------------------------------------------------------------- #
+LABOUR_ISO = {"US": ["USA"], "XM": ["DEU", "FRA", "ITA", "ESP"], "CN": ["CHN"], "JP": ["JPN"], "GB": ["GBR"],
+              "IN": ["IND"], "BR": ["BRA"], "CA": ["CAN"], "RU": ["RUS"], "KR": ["KOR"], "AU": ["AUS"],
+              "MX": ["MEX"], "CH": ["CHE"]}
+EMERGING = {"BR", "IN", "MX", "RU", "CN"}
+
+
+def _unemployment(labour_recent: dict, area: str) -> dict | None:
+    """Latest monthly (else quarterly) unemployment and its change over ~6 months (euro area: big-4 average)."""
+    vals = []
+    for iso in LABOUR_ISO.get(area, []):
+        s = labour_recent.get(iso) or []
+        monthly = [p for p in s if "-M" in p[0]]
+        quarterly = [p for p in s if "-Q" in p[0]]
+        if len(monthly) >= 7:
+            vals.append((monthly[-1][0], monthly[-1][1], monthly[-1][1] - monthly[-7][1]))
+        elif len(quarterly) >= 3:
+            vals.append((quarterly[-1][0], quarterly[-1][1], quarterly[-1][1] - quarterly[-3][1]))
+    if not vals:
+        return None
+    period = max(v[0] for v in vals)
+    return {"rate": round(sum(v[1] for v in vals) / len(vals), 2),
+            "change_6m": round(sum(v[2] for v in vals) / len(vals), 2),
+            "period": period.replace("-M", "-").replace("-Q", " Q"),
+            "label": "euro area (DE, FR, IT, ES average)" if area == "XM" else None}
+
+
+def rate_outlook(area, bank, rate, d3, cpi, cpi_3m_chg, real, neutral, position, strength, fx_1m,
+                 fiscal, energy, unemp, gap_vs_us, is_us) -> dict:
+    target = bank["target"]
+    lo, hi = bank["band"] if bank.get("band") else (target - 0.5, target + 0.5)
+    hike, cut, hold = [], [], []
+
+    # --- inflation
+    if cpi is not None:
+        if cpi > hi and (cpi_3m_chg is None or cpi_3m_chg >= -0.1):
+            hike.append(f"Inflation is {cpi:.1f}%, above target ({bank['target_note']}) and not coming down")
+        elif cpi > hi:
+            hold.append(f"Inflation is {cpi:.1f}%, still above target but falling ({cpi_3m_chg:+.1f} pp in 3 months)")
+        elif cpi < lo:
+            cut.append(f"Inflation is {cpi:.1f}%, below target ({bank['target_note']})")
+        else:
+            if cpi_3m_chg is not None and cpi_3m_chg < -0.3:
+                cut.append(f"Inflation is {cpi:.1f}%, near target and falling")
+            elif cpi_3m_chg is not None and cpi_3m_chg >= 0.5:
+                hike.append(f"Inflation is {cpi:.1f}%, still in range but rising fast ({cpi_3m_chg:+.1f} pp in 3 months)")
+            else:
+                hold.append(f"Inflation is {cpi:.1f}%, close to target ({bank['target_note']})")
+    # --- policy stance in real terms
+    if real is not None:
+        if position == "accommodative" and cpi is not None and cpi > hi:
+            hike.append(f"The real rate ({real:+.1f}%) is below neutral while inflation is above target, so policy is still loose")
+        elif position == "restrictive" and cpi is not None and cpi <= hi:
+            cut.append(f"The real rate ({real:+.1f}%) is well above neutral (~{neutral:g}%), so policy is tight with inflation near target")
+        elif position == "restrictive":
+            hold.append(f"Policy is already tight in real terms ({real:+.1f}%), so the bank can wait for it to work")
+    # --- recent move
+    if d3 is not None and abs(d3) >= 0.25:
+        hold.append(f"It moved rates {d3:+.2f} pp in the last 3 months and usually waits to see the effect")
+    # --- labour market
+    if unemp:
+        if unemp["change_6m"] >= 0.5:
+            cut.append(f"Unemployment rose {unemp['change_6m']:+.1f} pp in about 6 months, to {unemp['rate']:.1f}% (a recession warning)")
+        elif unemp["change_6m"] <= -0.3 and cpi is not None and cpi > hi:
+            hike.append(f"Unemployment fell to {unemp['rate']:.1f}% while inflation is above target (a tight labour market)")
+        elif abs(unemp["change_6m"]) < 0.3:
+            hold.append(f"The job market is stable (unemployment {unemp['rate']:.1f}%)")
+    # --- currency
+    if fx_1m is not None and fx_1m <= -5:
+        hike.append(f"The {bank['currency']} fell {abs(fx_1m):.1f}% against the dollar in the last month, a sudden drop that often forces a hike")
+    elif strength is not None:
+        if strength <= -5:
+            hike.append(f"The {'dollar' if is_us else bank['currency']} weakened {abs(strength):.1f}% in a year, raising import prices")
+        elif strength >= 5:
+            cut.append(f"The {'dollar' if is_us else bank['currency']} strengthened {strength:.1f}% in a year, making imports cheaper")
+    # --- energy
+    if energy and energy["shock"] == "up":
+        dep = energy.get("import_dependence") or 0
+        fading = (energy.get("oil_outlook_12m") or 0) <= -10
+        if dep > 10 and not fading:
+            hike.append(f"Oil is up {energy['oil_change_12m']:.0f}% in a year, pushing up costs for an energy importer")
+        elif fading and dep > 10:
+            hold.append(f"Oil is up {energy['oil_change_12m']:.0f}%, but the EIA expects prices to fall, so the bank can look through it")
+    elif energy and energy["shock"] == "down":
+        cut.append(f"Oil is down {abs(energy['oil_change_12m']):.0f}% in a year, lowering costs")
+    # --- fiscal
+    if fiscal:
+        if fiscal["impulse"] >= 0.5:
+            hike.append(f"The government is adding stimulus ({fiscal['impulse']:+.1f} pp of GDP), which adds demand")
+        elif fiscal["impulse"] <= -0.5:
+            cut.append(f"The government is tightening its budget ({fiscal['impulse']:+.1f} pp of GDP), which cools demand")
+
+    diff = len(hike) - len(cut)
+    if hike and cut:
+        hold.append("Signals point both ways, so waiting is the safest option")
+    if diff >= 2:
+        verdict, lean = "Pressure to raise rates", "up"
+    elif diff <= -2:
+        verdict, lean = "Room to cut rates", "down"
+    else:
+        verdict = "Likely to hold" + (", leaning to a hike" if diff == 1 else ", leaning to a cut" if diff == -1 else "")
+        lean = "hold"
+
+    # --- triggers: what could make it move fast
+    trig = []
+    if cpi is not None:
+        trig.append({"variable": "Inflation (CPI, y/y)", "now": f"{cpi:.1f}%" + (f" ({cpi_3m_chg:+.1f} pp in 3 mo)" if cpi_3m_chg is not None else ""),
+                     "hike": f"Rises above {hi + 0.5:.1f}% or keeps climbing for several months",
+                     "cut": f"Falls below {lo:.1f}%",
+                     "status": "hike" if cpi > hi + 0.5 else "cut" if cpi < lo else ("near" if cpi > hi or cpi < lo + 0.3 else "")})
+    if unemp:
+        trig.append({"variable": "Unemployment" + (f" ({unemp['label']})" if unemp.get("label") else ""),
+                     "now": f"{unemp['rate']:.1f}% ({unemp['period']}), {unemp['change_6m']:+.1f} pp in ~6 mo",
+                     "hike": "Falls fast while inflation is above target (overheating)",
+                     "cut": "Rises 0.5 pp or more within 6 months (recession signal)",
+                     "status": "cut" if unemp["change_6m"] >= 0.5 else "near" if unemp["change_6m"] >= 0.3 else ""})
+    else:
+        trig.append({"variable": "Unemployment", "now": "no monthly data",
+                     "hike": "Labour shortages push wages up fast", "cut": "Lay-offs spread / unemployment jumps", "status": ""})
+    cur = "dollar" if is_us else bank["currency"]
+    trig.append({"variable": f"Exchange rate ({cur})",
+                 "now": (f"{strength:+.1f}% in 12 mo" if strength is not None else "—") + (f", {fx_1m:+.1f}% last month" if fx_1m is not None else ""),
+                 "hike": f"The {cur} drops 5%+ in a few weeks (imported inflation, money leaving the country)" +
+                         (" — emerging markets often hike in emergency meetings" if area in EMERGING else ""),
+                 "cut": f"The {cur} strengthens sharply, cheapening imports",
+                 "status": "hike" if fx_1m is not None and fx_1m <= -5 else "near" if fx_1m is not None and fx_1m <= -3 else ""})
+    if energy:
+        oil = energy["oil"]
+        trig.append({"variable": "Oil price (Brent)", "now": f"${oil:.0f} ({energy['oil_change_12m']:+.0f}% in 12 mo)",
+                     "hike": f"Jumps above ${oil * 1.25:.0f} and starts feeding wages and prices" +
+                             (" (hits an importer hard)" if (energy.get("import_dependence") or 0) > 10 else ""),
+                     "cut": f"Falls below ${oil * 0.75:.0f} or demand collapses",
+                     "status": "near" if energy["shock"] == "up" else ""})
+    if is_us:
+        trig.append({"variable": "Financial markets", "now": "—",
+                     "hike": "Inflation expectations jump in markets or surveys",
+                     "cut": "Bank failures or a market crash: emergency cuts and liquidity (as in 2008 and March 2020)", "status": ""})
+    else:
+        trig.append({"variable": "The Fed (US rates)", "now": f"gap vs Fed {gap_vs_us:+.2f} pp" if gap_vs_us is not None else "—",
+                     "hike": f"The Fed hikes, narrowing the gap and pressuring the {bank['currency']}",
+                     "cut": "The Fed cuts, giving room to follow without weakening the currency", "status": ""})
+    if fiscal:
+        trig.append({"variable": "Government budget", "now": f"deficit {abs(fiscal['balance']):.1f}% of GDP, impulse {fiscal['impulse']:+.1f} pp",
+                     "hike": "A big new spending package or tax cut adds demand",
+                     "cut": "Sharp budget cuts or a fiscal crisis hits growth",
+                     "status": "near" if fiscal["impulse"] >= 0.5 else ""})
+    if area == "RU":
+        trig.append({"variable": "Sanctions / capital flight", "now": "—",
+                     "hike": "New sanctions or a run on the rouble (in Feb 2022 the CBR raised rates from 9.5% to 20% overnight)",
+                     "cut": "Easing of sanctions and a stable rouble", "status": ""})
+    elif not is_us:
+        trig.append({"variable": "Financial stress", "now": "—",
+                     "hike": "Capital flight or a currency crisis" if area in EMERGING else "Rarely a reason to hike",
+                     "cut": "A banking or market crisis: emergency cuts and liquidity support", "status": ""})
+    return {"verdict": verdict, "lean": lean, "hike": hike, "cut": cut, "hold": hold, "triggers": trig,
+            "unemployment": unemp}
+
+
+def build_central_banks(bis: dict, countries: list[dict], macro: dict | None = None,
+                        labour_raw: dict | None = None) -> list[dict]:
     import datetime as dt
     year = dt.date.today().year
     macro = macro or {}
@@ -465,6 +626,17 @@ def build_central_banks(bis: dict, countries: list[dict], macro: dict | None = N
         energy = (_energy(macro["energy"], macro.get("energy_dependence", {}).get(area))
                   if macro.get("energy") else None)
         infl = _inflation(bank, cpi, position, stance, strength, fiscal, energy)
+        cpi_3 = _at(d["cpi"], _shift(cp, 3)) if cp else None
+        cpi_3m_chg = round(cpi - cpi_3, 2) if cpi is not None and cpi_3 is not None else None
+        fx_1m = None
+        if is_us and others:
+            pass  # dollar 1-month move not tracked separately
+        elif fp and fx:
+            fx_prev = _at(d["fx"], _shift(fp, 1))
+            fx_1m = round((fx_prev / fx - 1) * 100, 2) if fx_prev else None
+        unemp = _unemployment((labour_raw or {}).get("recent", {}), area)
+        outlook = rate_outlook(area, bank, rate, d3, cpi, cpi_3m_chg, real, neutral, position, strength, fx_1m,
+                               fiscal, energy, unemp, diff if not is_us else None, is_us)
         # IS shift (schematic units, pp of GDP-ish): fiscal impulse + energy terms-of-trade effect
         is_shift = round((fiscal["impulse"] if fiscal else 0) + (energy["is_effect"] * 4 if energy else 0), 2)
 
@@ -483,6 +655,8 @@ def build_central_banks(bis: dict, countries: list[dict], macro: dict | None = N
             "stance": stance, "stance_note": stance_note, "position": position,
             "lm_shift": d12 or 0,
             "is_shift": is_shift,
+            "outlook": outlook,
+            "cpi_3m_change": cpi_3m_chg,
             "fiscal": fiscal,
             "energy": energy,
             "islm_text": _islm_text(stance, d12, real, neutral, position),

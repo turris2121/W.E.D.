@@ -10,7 +10,7 @@
           "mandate": "Price stability in the euro area", "neutral_real_rate": 0.25,
           "url": "https://www.ecb.europa.eu/mopo/html/index.en.html" },
   "CN": { "name": "People's Bank of China", "short": "PBoC", "currency": "CNY", "countries": ["CHN"],
-          "target": 2, "band": null, "target_note": "around 2% (government CPI goal)",
+          "target": 2, "band": null, "target_note": "around 2%, government CPI goal",
           "mandate": "Price stability, growth, employment and financial stability (multiple goals)", "neutral_real_rate": 1.0,
           "url": "http://www.pbc.gov.cn/en/" },
   "JP": { "name": "Bank of Japan", "short": "BoJ", "currency": "JPY", "countries": ["JPN"],
@@ -26,7 +26,7 @@
           "mandate": "Price stability while keeping growth in mind", "neutral_real_rate": 1.5,
           "url": "https://www.rbi.org.in/" },
   "BR": { "name": "Central Bank of Brazil", "short": "BCB", "currency": "BRL", "countries": ["BRA"],
-          "target": 3, "band": [1.5, 4.5], "target_note": "3% ± 1.5 pp (continuous target)",
+          "target": 3, "band": [1.5, 4.5], "target_note": "3% ± 1.5 pp, continuous target",
           "mandate": "Price stability; smooth economic fluctuations and foster full employment", "neutral_real_rate": 5.0,
           "url": "https://www.bcb.gov.br/en/monetarypolicy" },
   "CA": { "name": "Bank of Canada", "short": "BoC", "currency": "CAD", "countries": ["CAN"],
@@ -50,7 +50,7 @@
           "mandate": "Preserve the purchasing power of the peso", "neutral_real_rate": 2.5,
           "url": "https://www.banxico.org.mx/indexEn.html" },
   "CH": { "name": "Swiss National Bank", "short": "SNB", "currency": "CHF", "countries": ["CHE"],
-          "target": 1, "band": [0, 2], "target_note": "below 2% (0–2% range)",
+          "target": 1, "band": [0, 2], "target_note": "below 2%, 0–2% range",
           "mandate": "Price stability, taking the economy into account", "neutral_real_rate": 0.0,
           "url": "https://www.snb.ch/en/the-snb/mandates-goals/monetary-policy" }
 }

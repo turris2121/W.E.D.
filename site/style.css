@@ -451,3 +451,31 @@ td.r-p3, td.r-p2, td.r-m3 { color: #fff; }
 #lb-dumbbell .db-line.big { stroke: var(--text); stroke-width: 3; }
 #lb-dumbbell .db-dot { stroke: var(--surface); stroke-width: 1.5; }
 .chart .brk { stroke: var(--muted); stroke-dasharray: 3 3; }
+
+/* ---------- Rate outlook + triggers ---------- */
+.verdict { display: inline-flex; gap: 5px; align-items: center; width: fit-content; font-size: 12px; font-weight: 650;
+  padding: 2px 9px; border-radius: 99px; border: 1px solid var(--border); color: var(--text); white-space: nowrap; }
+.verdict.lean-up { border-color: var(--k-leg); background: color-mix(in srgb, var(--k-leg) 12%, transparent); }
+.verdict.lean-down { border-color: var(--k-pres); background: color-mix(in srgb, var(--k-pres) 12%, transparent); }
+.verdict.lean-hold { border-color: var(--muted); }
+.outlook-card { margin-bottom: 12px; }
+.outlook-card h3 { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+.reasons { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 10px; margin: 8px 0; }
+.rs { border: 1px solid var(--border); border-radius: 10px; padding: 10px 12px; background: var(--surface); }
+.rs h4 { margin: 0 0 6px; font-size: 13px; }
+.rs ul { margin: 0; padding-left: 18px; display: grid; gap: 4px; }
+.rs-up { border-top: 3px solid var(--k-leg); }
+.rs-down { border-top: 3px solid var(--k-pres); }
+.rs-hold { border-top: 3px solid var(--muted); }
+table.trig td { white-space: normal; vertical-align: top; min-width: 120px; }
+table.trig td.num { white-space: nowrap; }
+table.trig tr.ts-hike td:first-child, table.trig tr.ts-cut td:first-child, table.trig tr.ts-near td:first-child { border-left: 3px solid var(--muted); }
+table.trig tr.ts-hike td:first-child { border-left-color: var(--k-leg); }
+table.trig tr.ts-cut td:first-child { border-left-color: var(--k-pres); }
+table.trig tr.ts-hike, table.trig tr.ts-cut { background: var(--surface-2); }
+.tstat { font-size: 11px; color: var(--text-2); }
+#bank-detail > .card { margin-bottom: 12px; }
+details.more { margin-top: 4px; }
+details.more > summary { cursor: pointer; font-weight: 600; color: var(--accent); padding: 8px 0; }
+details.more .bd-charts { margin-top: 8px; }
+.sub3 { margin-top: 12px; }

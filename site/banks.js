@@ -106,22 +106,13 @@ function renderBankCards() {
       <span class="bc-top"><span class="bc-flag">${esc(b.flag)}</span><span class="bc-short">${esc(b.short)}</span>
         <span class="bc-share">${b.world_gdp_share.toFixed(1)}% of world GDP</span></span>
       <span class="bc-rate">${pct(b.rate)}</span>
-      ${stanceBadge(b)}
       <span class="bc-meta">Inflation ${pct(b.cpi, 1)} · target ${esc(targetText(b))}</span>
-      <span class="bc-meta">Real rate ${signed(b.real_rate, "%", 1)} · ${esc(b.position)}</span>
+      ${b.outlook ? verdictBadge(b.outlook) : stanceBadge(b)}
     </button>`).join("");
 }
 
 // ------------------------------------------------------------------ table
 function initBankTable() {
-  // Fiscal + energy columns, inserted before "Inflation outlook" (keeps index.html unchanged).
-  const outlookTh = document.querySelector('#bank-tbl th[data-k="outlook"]');
-  if (outlookTh && !document.querySelector('#bank-tbl th[data-k="fiscal_balance"]')) {
-    outlookTh.insertAdjacentHTML("beforebegin",
-      `<th data-k="fiscal_balance" class="num">Budget ${new Date().getFullYear()} (% GDP)</th>` +
-      `<th data-k="fiscal_impulse" class="num">Fiscal impulse</th>` +
-      `<th data-k="energy_dep" class="num">Energy imports</th>`);
-  }
   document.querySelectorAll("#bank-tbl th").forEach((th) => th.addEventListener("click", () => {
     const k = th.dataset.k;
     bankState.sort = { k, asc: bankState.sort.k === k ? !bankState.sort.asc : k === "short" || k === "position" };
@@ -138,9 +129,7 @@ function renderBankTable() {
   const { k, asc } = bankState.sort;
   const val = (b) => ({
     outlook: () => ({ down: -1, stable: 0, up: 1 }[b.inflation.direction]),
-    fiscal_balance: () => b.fiscal?.balance,
-    fiscal_impulse: () => b.fiscal?.impulse,
-    energy_dep: () => b.energy?.import_dependence,
+    verdict: () => ({ up: 1, hold: 0, down: -1 }[b.outlook?.lean]),
   }[k] || (() => b[k]))();
   const rows = bankState.list.slice().sort((a, b) => {
     const va = val(a), vb = val(b);
@@ -162,11 +151,8 @@ function renderBankTable() {
       <td class="num">${pct(b.cpi, 1)}</td>
       <td class="num">${esc(targetText(b))}</td>
       <td class="num">${signed(b.real_rate, "%", 1)}</td>
-      <td>${esc(b.position)}</td>
+      <td>${b.outlook ? verdictBadge(b.outlook) : "—"}</td>
       <td class="num">${b.area === "US" ? "USD " : ""}${signed(b.currency_strength_12m, "%", 1)}</td>
-      <td class="num">${b.fiscal ? signed(b.fiscal.balance, "%", 1) : "—"}</td>
-      <td class="num">${b.fiscal ? signed(b.fiscal.impulse, " pp", 1) : "—"}</td>
-      <td class="num">${b.energy && b.energy.import_dependence != null ? signed(b.energy.import_dependence, "%", 0) : "—"}</td>
       <td><span class="outlook o-${esc(b.inflation.direction)}"><span aria-hidden="true">${esc(b.inflation.arrow)}</span> ${OUTLOOK[b.inflation.direction]}</span></td>
     </tr>`).join("");
 }
@@ -183,12 +169,21 @@ function fiscalBars(f) {
 }
 
 // ------------------------------------------------------------------ detail
+const LEAN = { up: { icon: "▲", cls: "lean-up" }, down: { icon: "▼", cls: "lean-down" }, hold: { icon: "■", cls: "lean-hold" } };
+const verdictBadge = (o) => `<span class="verdict ${LEAN[o.lean].cls}"><span aria-hidden="true">${LEAN[o.lean].icon}</span> ${esc(o.verdict)}</span>`;
+const TRIG_STATUS = { hike: "Hike trigger hit", cut: "Cut trigger hit", near: "Close to a trigger" };
+
+function reasonList(title, items, cls) {
+  if (!items.length) return "";
+  return `<div class="rs ${cls}"><h4>${title}</h4><ul>${items.map((r) => `<li>${esc(r)}</li>`).join("")}</ul></div>`;
+}
+
 function renderBankDetail() {
   const b = bankState.list.find((x) => x.area === bankState.sel);
   const box = document.getElementById("bank-detail");
   if (!b) { box.hidden = true; return; }
   box.hidden = false;
-  const rateLine = `${pct(b.rate)} <span class="muted">(${fmtDate(b.rate_period)})</span>`;
+  const o = b.outlook;
   box.innerHTML = `
     <div class="bd-head">
       <span class="bd-flag">${esc(b.flag)}</span>
@@ -196,147 +191,50 @@ function renderBankDetail() {
         <div class="muted">${esc(b.mandate)} · <a href="${esc(b.url)}" target="_blank" rel="noopener">official site</a></div></div>
     </div>
     <div class="bd-stats">
-      <div><span class="l">Policy rate</span><span class="v">${rateLine}</span></div>
-      <div><span class="l">12-month change</span><span class="v">${signed(b.rate_change_12m)} ${stanceBadge(b)}</span></div>
-      <div><span class="l">Inflation (CPI)</span><span class="v">${pct(b.cpi, 1)} <span class="muted">target ${esc(targetText(b))}</span></span></div>
-      <div><span class="l">Real rate</span><span class="v">${signed(b.real_rate, "%", 1)} <span class="muted">${esc(b.position)}</span></span></div>
-      <div><span class="l">${b.area === "US" ? "Dollar vs others" : esc(b.currency) + " vs USD"} (12 mo)</span><span class="v">${signed(b.currency_strength_12m, "%", 1)}</span></div>
-      ${b.fiscal ? `<div><span class="l">Budget balance ${new Date().getFullYear()}</span><span class="v">${signed(b.fiscal.balance, "% GDP", 1)} <span class="muted">${esc(b.fiscal.stance)}</span></span></div>` : ""}
-      ${b.energy ? `<div><span class="l">Energy imports (net)</span><span class="v">${b.energy.import_dependence != null ? signed(b.energy.import_dependence, "%", 0) : "—"} <span class="muted">${esc(b.energy.role.replace("net energy ", ""))}</span></span></div>` : ""}
+      <div><span class="l">Policy rate (${fmtDate(b.rate_period)})</span><span class="v">${pct(b.rate)}</span></div>
+      <div><span class="l">Change in 12 months</span><span class="v">${signed(b.rate_change_12m)} ${stanceBadge(b)}</span></div>
+      <div><span class="l">Inflation vs target</span><span class="v">${pct(b.cpi, 1)} <span class="muted">target ${esc(targetText(b))}</span></span></div>
+      <div><span class="l">Real rate (rate − inflation)</span><span class="v">${signed(b.real_rate, "%", 1)} <span class="muted">${esc(b.position)}</span></span></div>
     </div>
-    <div class="bd-grid">
-      <div class="card">
-        <h3>IS-LM: what this policy does</h3>
-        <div id="islm"></div>
-        <p class="caption" id="islm-caption"></p>
+
+    <div class="card outlook-card">
+      <h3>Rate outlook ${verdictBadge(o)}</h3>
+      <div class="reasons">
+        ${reasonList("Why it may hold", o.hold, "rs-hold")}
+        ${reasonList("Pressure to raise rates", o.hike, "rs-up")}
+        ${reasonList("Room to cut rates", o.cut, "rs-down")}
       </div>
-      <div class="bd-text">
-        <div class="card"><h3>Monetary policy</h3><p>${esc(STANCE[b.stance].label)}: ${esc(b.stance_note)}. ${esc(b.islm_text)}</p></div>
-        <div class="card"><h3>Currency (${esc(b.currency)})</h3><p>${esc(b.currency_text)}</p></div>
+      <p class="muted small">Rule-based reading of the latest data, not a forecast. Central banks also weigh things not modelled here (wage deals, credit conditions, politics).</p>
+    </div>
+
+    <div class="card">
+      <h3>What could make it move fast</h3>
+      <div class="table-scroll"><table class="trig">
+        <thead><tr><th>Variable</th><th>Now</th><th>Would push a <strong>hike</strong> if…</th><th>Would push a <strong>cut</strong> if…</th></tr></thead>
+        <tbody>${o.triggers.map((t) => `<tr class="${t.status ? "ts-" + esc(t.status) : ""}">
+          <td><strong>${esc(t.variable)}</strong>${t.status ? `<br><span class="tstat">${esc(TRIG_STATUS[t.status])}</span>` : ""}</td>
+          <td class="num">${esc(t.now)}</td><td>${esc(t.hike)}</td><td>${esc(t.cut)}</td></tr>`).join("")}</tbody>
+      </table></div>
+    </div>
+
+    <div class="card"><h3>Policy rate vs inflation</h3><div class="legend" id="lg-rates"></div><div id="ch-rates" class="chart"></div></div>
+
+    <details class="more">
+      <summary>More detail: currency, government budget, energy and inflation outlook</summary>
+      <div class="bd-charts">
+        <div class="card"><h3>Currency (${esc(b.currency)})</h3><p>${esc(b.currency_text)}</p>
+          <h3 id="ch-fx-title" class="sub3"></h3><div class="legend" id="lg-fx"></div><div id="ch-fx" class="chart"></div></div>
         <div class="card"><h3>Inflation outlook <span class="outlook o-${esc(b.inflation.direction)}"><span aria-hidden="true">${esc(b.inflation.arrow)}</span> ${OUTLOOK[b.inflation.direction]}</span></h3>
-          <p>${esc(b.inflation.text)}</p><p class="muted small">Rule-based estimate, not a forecast.</p></div>
+          <p>${esc(b.inflation.text)}</p></div>
+        <div class="card"><h3>Government budget ${b.fiscal ? `<span class="stance fs-${esc(b.fiscal.stance)}">${esc(b.fiscal.stance)}</span>` : ""}</h3>
+          ${b.fiscal ? `<p>${esc(b.fiscal.text)}</p><div class="mini-bars" aria-label="Budget balance by year">${fiscalBars(b.fiscal)}</div>
+            <p class="muted small">Source: ${esc(b.fiscal.source || "")}.</p>` : `<p class="muted">No fiscal data available.</p>`}</div>
+        <div class="card"><h3>Energy ${b.energy && b.energy.shock !== "none" ? `<span class="stance en-${esc(b.energy.shock)}">oil ${signed(b.energy.oil_change_12m, "%", 0)}</span>` : ""}</h3>
+          ${b.energy ? `<p>${esc(b.energy.text)}</p>` : `<p class="muted">No energy data available.</p>`}</div>
       </div>
-    </div>
-    <div class="bd-charts">
-      <div class="card"><h3>Fiscal policy ${b.fiscal ? `<span class="stance fs-${esc(b.fiscal.stance)}">${esc(b.fiscal.stance)}</span>` : ""}</h3>
-        ${b.fiscal ? `<p>${esc(b.fiscal.text)}</p>
-          <div class="mini-bars" aria-label="Budget balance by year">${fiscalBars(b.fiscal)}</div>
-          <p class="muted small">Source: ${esc(b.fiscal.source || "")}. Impulse = rise in the deficit this year; positive = stimulus.</p>`
-        : `<p class="muted">No fiscal data available.</p>`}</div>
-      <div class="card"><h3>Energy shock ${b.energy && b.energy.shock !== "none" ? `<span class="stance en-${esc(b.energy.shock)}">oil ${signed(b.energy.oil_change_12m, "%", 0)}</span>` : ""}</h3>
-        ${b.energy ? `<p>${esc(b.energy.text)}</p><p class="muted small">Oil: EIA Short-Term Energy Outlook. Import dependence: World Bank. Pass-through rule: +10% oil ≈ +0.3 pp inflation.</p>`
-        : `<p class="muted">No energy data available.</p>`}</div>
-    </div>
-    <div class="bd-charts">
-      <div class="card"><h3>Policy rate vs inflation</h3><div class="legend" id="lg-rates"></div><div id="ch-rates" class="chart"></div></div>
-      <div class="card"><h3 id="ch-fx-title"></h3><div class="legend" id="lg-fx"></div><div id="ch-fx" class="chart"></div></div>
-    </div>`;
-  drawISLM(b);
+    </details>`;
   drawRateChart(b);
   drawFxChart(b);
-}
-
-// ------------------------------------------------------------------ IS-LM diagram
-function drawISLM(b) {
-  const W = 420, H = 300, m = { l: 44, r: 20, t: 14, b: 40 };
-  const w = W - m.l - m.r, h = H - m.t - m.b;
-  // Schematic in unit space:  IS: r = 0.95 - 0.9Y + a     LM: r = 0.05 + 0.9Y + s
-  const d = b.lm_shift || 0, di = b.is_shift || 0;
-  const lmMoved = Math.abs(d) >= 0.01, isMoved = Math.abs(di) >= 0.3;
-  const clamp = (v, lo) => Math.max(-0.26, Math.min(0.26, v)) || 0;
-  let s1 = clamp(d * 0.12);
-  if (lmMoved && Math.abs(s1) < 0.06) s1 = Math.sign(d) * 0.06;
-  let a1 = clamp(di * 0.06);
-  if (isMoved && Math.abs(a1) < 0.06) a1 = Math.sign(di) * 0.06;
-  if (!isMoved) a1 = 0;
-  const moved = lmMoved || isMoved;
-  const eq = (s, a) => { const Y = (0.9 + a - s) / 1.8; return [Y, 0.95 - 0.9 * Y + a]; };
-  const X = (Y) => m.l + Y * w, R = (r) => m.t + (1 - r) * h;
-  const line = (f) => { const pts = []; for (let Y = 0.04; Y <= 0.96; Y += 0.02) pts.push([X(Y), R(f(Y))]); return "M" + pts.map((p) => p.join(",")).join("L"); };
-  const ISf = (a) => (Y) => 0.95 - 0.9 * Y + a, LMf = (s) => (Y) => 0.05 + 0.9 * Y + s;
-  const [Y0, r0] = eq(0, 0), [Y1, r1] = eq(s1, a1);
-
-  // Label at the visible end of an LM line (upward), or the low end of an IS line (downward).
-  const lmLabel = (text, s, side, cls) => {
-    let Y = 0.9;
-    if (0.05 + 0.9 * Y + s > 0.97) Y = (0.97 - 0.05 - s) / 0.9;
-    const r = 0.05 + 0.9 * Y + s;
-    return `<text class="lbl ${cls}" x="${X(Y) + (side === "above" ? -30 : 6)}" y="${R(r) + (side === "above" ? -6 : 16)}">${text}</text>`;
-  };
-  const isLabel = (text, a, side, cls) => {
-    let Y = 0.9;
-    if (0.95 - 0.9 * Y + a < 0.03) Y = (0.95 + a - 0.03) / 0.9;
-    const r = 0.95 - 0.9 * Y + a;
-    return `<text class="lbl ${cls}" x="${X(Y) + (side === "above" ? 4 : -30)}" y="${R(r) + (side === "above" ? -8 : 18)}">${text}</text>`;
-  };
-  const arrow = (x1, y1, x2, y2) => {
-    const ang = Math.atan2(y2 - y1, x2 - x1), hx = x2 - 9 * Math.cos(ang), hy = y2 - 9 * Math.sin(ang);
-    const px = 5 * Math.sin(ang), py = -5 * Math.cos(ang);
-    return `<line class="shift" x1="${x1}" y1="${y1}" x2="${hx}" y2="${hy}"/>
-      <path class="islm-arrowhead" d="M${x2},${y2} L${hx + px},${hy + py} L${hx - px},${hy - py} Z"/>`;
-  };
-  // LM arrow: horizontal at r of LM0(0.66); IS arrow: horizontal at r of IS0(0.3)
-  // Arrows sit away from the equilibria: LM arrow upper right, IS arrow lower right.
-  const lmA = s1 > 0 ? 0.8 : 0.72, isA = a1 > 0 ? 0.74 : 0.82;
-  const lmArrow = lmMoved ? arrow(X(lmA) + (s1 > 0 ? -3 : 3), R(LMf(0)(lmA)), X(lmA - s1 / 0.9) + (s1 > 0 ? 3 : -3), R(LMf(0)(lmA))) : "";
-  const isArrow = isMoved ? arrow(X(isA) + (a1 > 0 ? 3 : -3), R(ISf(0)(isA)), X(isA + a1 / 0.9) + (a1 > 0 ? -3 : 3), R(ISf(0)(isA))) : "";
-  const rClose = Math.abs(R(r1) - R(r0)) < 13, yClose = Math.abs(X(Y1) - X(Y0)) < 22;
-
-  const desc = [
-    lmMoved ? (d > 0 ? "LM shifts up/left (monetary tightening)" : "LM shifts down/right (monetary easing)") : "LM unchanged",
-    isMoved ? (di > 0 ? "IS shifts right (fiscal stimulus / energy gain)" : "IS shifts left (fiscal squeeze / energy shock)") : "IS unchanged",
-  ].join("; ");
-  const svg = `
-  <svg viewBox="0 0 ${W} ${H}" role="img" aria-label="IS-LM diagram: ${esc(desc)}">
-    <defs><clipPath id="plot"><rect x="${m.l}" y="${m.t}" width="${w}" height="${h}"/></clipPath></defs>
-    <line class="axis" x1="${m.l}" y1="${m.t}" x2="${m.l}" y2="${m.t + h}"/>
-    <line class="axis" x1="${m.l}" y1="${m.t + h}" x2="${m.l + w}" y2="${m.t + h}"/>
-    <text class="ax-l" x="${m.l + w}" y="${H - 10}" text-anchor="end">Output (Y)</text>
-    <text class="ax-l" transform="translate(14 ${m.t + h / 2}) rotate(-90)" text-anchor="middle">Interest rate (r)</text>
-    <g clip-path="url(#plot)">
-      <path class="is ${isMoved ? "lm0" : ""}" d="${line(ISf(0))}"/>
-      ${isMoved ? `<path class="is" d="${line(ISf(a1))}"/>` : ""}
-      <path class="lm ${lmMoved ? "lm0" : ""}" d="${line(LMf(0))}"/>
-      ${lmMoved ? `<path class="lm" d="${line(LMf(s1))}"/>` : ""}
-    </g>
-    ${isLabel(isMoved ? "IS₀" : "IS", 0, isMoved && a1 > 0 ? "below" : "above", isMoved ? "dim" : "")}
-    ${isMoved ? isLabel("IS₁", a1, a1 > 0 ? "above" : "below", "") : ""}
-    ${lmLabel(lmMoved ? "LM₀" : "LM", 0, lmMoved ? (s1 > 0 ? "below" : "above") : "below", lmMoved ? "dim" : "")}
-    ${lmMoved ? lmLabel("LM₁", s1, s1 > 0 ? "above" : "below", "") : ""}
-    ${guide(X(Y0), R(r0), m, h, moved ? "dim" : "")}
-    ${moved ? guide(X(Y1), R(r1), m, h, "") : ""}
-    <circle class="eq ${moved ? "eq0" : ""}" cx="${X(Y0)}" cy="${R(r0)}" r="5"/>
-    ${moved ? `<circle class="eq" cx="${X(Y1)}" cy="${R(r1)}" r="5"/>` : ""}
-    ${lmArrow}${isArrow}
-    <text class="lbl small" x="${X(Y0) + 8}" y="${R(r0) + (moved && r1 > r0 ? 16 : -8)}">${moved ? "E₀" : "E"}</text>
-    ${moved ? `<text class="lbl small" x="${X(Y1) + 8}" y="${R(r1) + (r1 > r0 ? -8 : 16)}">E₁</text>` : ""}
-    <text class="tick" x="${m.l - 6}" y="${R(r0) + 4}" text-anchor="end">${!moved ? "r" : rClose ? "r₀≈r₁" : "r₀"}</text>
-    ${moved && !rClose ? `<text class="tick" x="${m.l - 6}" y="${R(r1) + 4}" text-anchor="end">r₁</text>` : ""}
-    <text class="tick" x="${X(Y0) + (moved && yClose ? (Y0 > Y1 ? 6 : -6) : 0)}" y="${m.t + h + 14}" text-anchor="${moved && yClose ? (Y0 > Y1 ? "start" : "end") : "middle"}">${moved ? "Y₀" : "Y"}</text>
-    ${moved ? `<text class="tick" x="${X(Y1) + (yClose ? (Y1 > Y0 ? 6 : -6) : 0)}" y="${m.t + h + 14}" text-anchor="${yClose ? (Y1 > Y0 ? "start" : "end") : "middle"}">Y₁</text>` : ""}
-  </svg>`;
-  document.getElementById("islm").innerHTML = svg;
-
-  const parts = [];
-  if (lmMoved) parts.push(`Monetary: rate ${signed(d)} over 12 months → LM ${d > 0 ? "up/left" : "down/right"}.`);
-  else parts.push("Monetary: rate unchanged → LM stays put.");
-  if (isMoved) {
-    const why = [];
-    if (b.fiscal && Math.abs(b.fiscal.impulse) >= 0.3) why.push(`fiscal impulse ${signed(b.fiscal.impulse, " pp of GDP", 1)}`);
-    if (b.energy && Math.abs(b.energy.is_effect * 4) >= 0.3) why.push(`oil ${signed(b.energy.oil_change_12m, "%", 0)} for a ${b.energy.role}`);
-    parts.push(`Fiscal + energy: ${why.join(" and ") || "combined push"} → IS ${di > 0 ? "right" : "left"}.`);
-  } else parts.push("Fiscal + energy: small net effect → IS roughly unchanged.");
-  if (moved) {
-    const rWord = r1 > r0 + 0.005 ? "rises" : r1 < r0 - 0.005 ? "falls" : "is roughly unchanged";
-    const yWord = Y1 > Y0 + 0.005 ? "rises" : Y1 < Y0 - 0.005 ? "falls" : "is roughly unchanged";
-    parts.push(`Net result (E₀ → E₁): interest rate ${rWord}, output ${yWord}.`);
-  }
-  parts.push("Schematic, not to scale.");
-  document.getElementById("islm-caption").textContent = parts.join(" ");
-}
-
-function guide(x, y, m, h, cls) {
-  return `<line class="guide ${cls}" x1="${m.l}" y1="${y}" x2="${x}" y2="${y}"/><line class="guide ${cls}" x1="${x}" y1="${y}" x2="${x}" y2="${m.t + h}"/>`;
 }
 
 // ------------------------------------------------------------------ line charts

@@ -27,8 +27,11 @@ import time
 # Configuration
 # --------------------------------------------------------------------------- #
 ECONOMIES = ["USA", "CHN", "DEU", "JPN", "IND", "GBR", "FRA", "ITA",
-             "CAN", "BRA", "RUS", "KOR", "MEX", "AUS", "ESP"]
-NON_REPORTING = {"RUS"}  # mirror data only
+             "CAN", "BRA", "RUS", "KOR", "MEX", "AUS", "ESP",
+             "NLD", "SAU", "VNM"]  # NLD: Europe's main port; SAU: energy; VNM: China+1 supply chains
+NON_REPORTING = {"RUS", "VNM"}  # no recent Comtrade reports: mirror data (what partners report)
+HIST_START = 2018                # trends start the year the US-China tariffs began
+SCHEMA = 2                       # bump to force a re-download of cached reporters
 EU27 = {"AUT", "BEL", "BGR", "HRV", "CYP", "CZE", "DNK", "EST", "FIN", "FRA", "DEU", "GRC",
         "HUN", "IRL", "ITA", "LVA", "LTU", "LUX", "MLT", "NLD", "POL", "PRT", "ROU", "SVK",
         "SVN", "ESP", "SWE"}
@@ -44,6 +47,22 @@ WB = "https://api.worldbank.org/v2/country/{iso}/indicator/{ind}"
 OECD_CIT = ("https://sdmx.oecd.org/public/rest/data/OECD.CTP.TPS,DSD_TAX_CIT@DF_CIT,/"
             "{areas}.A.CIT........")
 TREASURY = "https://api.fiscaldata.treasury.gov/services/api/fiscal_service/v1/accounting/mts/mts_table_4"
+BATIS = "https://sdmx.oecd.org/public/rest/data/OECD.SDD.TPS,DSD_BATIS@DF_BATIS,/{key}"
+CENSUS = "https://api.census.gov/data/timeseries/intltrade/imports/hs"
+CENSUS_KEY = os.environ.get("CENSUS_KEY", "").strip()
+
+SERVICE_TYPES = {
+    "SC": "Transport", "SD": "Travel & tourism", "SE": "Construction", "SF": "Insurance & pensions",
+    "SG": "Financial services", "SH": "Royalties & licences (IP)", "SI": "Telecom, computer & IT",
+    "SJ": "Other business services", "SK": "Culture & recreation", "SA": "Processing for others",
+    "SB": "Maintenance & repair", "SL": "Government services",
+}
+# Census country names for the economies here (plus the EU aggregate and Taiwan).
+CENSUS_NAMES = {"CHINA": "CHN", "MEXICO": "MEX", "CANADA": "CAN", "GERMANY": "DEU", "JAPAN": "JPN",
+                "INDIA": "IND", "UNITED KINGDOM": "GBR", "FRANCE": "FRA", "ITALY": "ITA", "BRAZIL": "BRA",
+                "RUSSIA": "RUS", "KOREA, SOUTH": "KOR", "SOUTH KOREA": "KOR", "AUSTRALIA": "AUS", "SPAIN": "ESP",
+                "NETHERLANDS": "NLD", "SAUDI ARABIA": "SAU", "VIETNAM": "VNM", "TAIWAN": "TWN",
+                "SWITZERLAND": "CHE", "IRELAND": "IRL", "THAILAND": "THA", "EUROPEAN UNION": "EU"}
 
 TAX_INDICATORS = {
     "tariff_weighted": "TM.TAX.MRCH.WM.AR.ZS",      # applied, trade-weighted mean, all products
@@ -209,7 +228,7 @@ def fetch_trade(session, prev: dict | None = None) -> dict:
     REFRESH_DAYS are kept as they are. If Comtrade's quota runs out, the economies
     fetched so far are returned with complete=False and the next run continues."""
     prev = prev or {}
-    if prev.get("codes") and prev.get("partner_iso"):
+    if prev.get("codes") and prev.get("partner_iso") and all(e in prev["codes"] for e in ECONOMIES):
         iso_to_code, partner_iso = prev["codes"], prev["partner_iso"]
     else:
         iso_to_code, partner_iso = _reference(session)
@@ -217,9 +236,11 @@ def fetch_trade(session, prev: dict | None = None) -> dict:
     today = dt.date.today()
     out = {"codes": iso_to_code, "partner_iso": partner_iso, "reporters": dict(prev.get("reporters") or {})}
     set_codes = [iso_to_code[e] for e in ECONOMIES]
-    rus = iso_to_code["RUS"]
+    mirror_codes = [iso_to_code[e] for e in ECONOMIES if e in NON_REPORTING]
 
     def fresh(rec):
+        if rec.get("v") != SCHEMA:
+            return False
         try:
             return (today - dt.date.fromisoformat(rec.get("fetched", "1900-01-01"))).days < REFRESH_DAYS
         except ValueError:
@@ -228,7 +249,7 @@ def fetch_trade(session, prev: dict | None = None) -> dict:
     todo = [e for e in ECONOMIES if e not in NON_REPORTING and not (e in out["reporters"] and fresh(out["reporters"][e]))]
     try:
         for iso in todo:
-            _fetch_reporter(session, out, iso, iso_to_code, set_codes, rus, this_year, today)
+            _fetch_reporter(session, out, iso, iso_to_code, set_codes, mirror_codes, this_year, today)
     except QuotaExceeded as e:
         print(f"    trade: {e}; keeping {len(out['reporters'])} economies, will resume next run", flush=True)
         if not out["reporters"]:
@@ -237,7 +258,15 @@ def fetch_trade(session, prev: dict | None = None) -> dict:
     return out
 
 
-def _fetch_reporter(session, out, iso, iso_to_code, set_codes, rus, this_year, today):
+def _hist(rows) -> dict:
+    """{year: {partnerCode: value}}, partner "0" = world."""
+    out = {}
+    for r in rows:
+        out.setdefault(str(r["period"]), {})[str(r["partnerCode"])] = round(r["primaryValue"])
+    return out
+
+
+def _fetch_reporter(session, out, iso, iso_to_code, set_codes, mirror_codes, this_year, today):
     code = iso_to_code[iso]
     # Latest year this economy has reported (annual data lags ~6-10 months).
     year = None
@@ -248,13 +277,23 @@ def _fetch_reporter(session, out, iso, iso_to_code, set_codes, rus, this_year, t
     if year is None:
         raise RuntimeError(f"No recent Comtrade data for {iso}")
     others = [c for c in set_codes if c != code]
-    rec = {"year": year, "fetched": today.isoformat()}
+    rec = {"v": SCHEMA, "year": year, "fetched": today.isoformat()}
     rec["exports_by_chapter"] = _by_chapter(comtrade(session, "A", str(year), code, "X", "AG2", [0]))
     rec["imports_by_chapter"] = _by_chapter(comtrade(session, "A", str(year), code, "M", "AG2", [0]))
-    rec["exports_by_partner"] = _by_partner(comtrade(session, "A", str(year), code, "X"))
-    rec["imports_by_partner"] = _by_partner(comtrade(session, "A", str(year), code, "M"))
-    rec["exports_by_partner_prev"] = _by_partner(comtrade(session, "A", str(year - 1), code, "X"))
-    rec["imports_by_partner_prev"] = _by_partner(comtrade(session, "A", str(year - 1), code, "M"))
+    # Totals by partner for every year since HIST_START (one call per flow with a key;
+    # the keyless preview allows one period per call, so it only gets this year and last).
+    years = list(range(HIST_START, year + 1)) if COMTRADE_KEY else [year - 1, year]
+    for flow, key in (("X", "exports_hist"), ("M", "imports_hist")):
+        h = {}
+        for i in range(0, len(years), 12 if COMTRADE_KEY else 1):  # max 12 periods per call
+            h.update(_hist(comtrade(session, "A", ",".join(map(str, years[i:i + 12])), code, flow)))
+        rec[key] = h
+    cur, prv = rec["exports_hist"].get(str(year), {}), rec["exports_hist"].get(str(year - 1), {})
+    rec["exports_by_partner"] = {k: v for k, v in cur.items() if k != "0"}
+    rec["exports_by_partner_prev"] = {k: v for k, v in prv.items() if k != "0"}
+    cur, prv = rec["imports_hist"].get(str(year), {}), rec["imports_hist"].get(str(year - 1), {})
+    rec["imports_by_partner"] = {k: v for k, v in cur.items() if k != "0"}
+    rec["imports_by_partner_prev"] = {k: v for k, v in prv.items() if k != "0"}
     # What it sells to each of the other major economies, by HS chapter
     # (one call with a key; 4 partners per call on the 500-row preview).
     to = {}
@@ -264,8 +303,12 @@ def _fetch_reporter(session, out, iso, iso_to_code, set_codes, rus, this_year, t
             if str(r["cmdCode"]).isdigit():
                 to.setdefault(str(r["partnerCode"]), {})[str(int(r["cmdCode"]))] = round(r["primaryValue"])
     rec["exports_to_majors_by_chapter"] = to
-    # Mirror data for Russia: what this economy buys from Russia, by chapter.
-    rec["imports_from_rus_by_chapter"] = _by_chapter(comtrade(session, "A", str(year), code, "M", "AG2", [rus]))
+    # Mirror data for non-reporting economies: what this economy buys from them, by chapter.
+    mir = {}
+    for r in comtrade(session, "A", str(year), code, "M", "AG2", [c for c in mirror_codes if c != code]):
+        if str(r["cmdCode"]).isdigit():
+            mir.setdefault(str(r["partnerCode"]), {})[str(int(r["cmdCode"]))] = round(r["primaryValue"])
+    rec["imports_from_mirror_by_chapter"] = mir
     out["reporters"][iso] = rec
     print(f"    trade: {iso} {year} ok", flush=True)
     return out
@@ -385,7 +428,7 @@ def build_trade(raw: dict, tariffs: dict | None, customs: dict | None, countries
             if a in NON_REPORTING:
                 if b in reps:
                     matrix[a][b] = reps[b]["imports_by_partner"].get(str(codes[a]))
-                    flows_by_chapter[a][b] = reps[b]["imports_from_rus_by_chapter"]
+                    flows_by_chapter[a][b] = reps[b].get("imports_from_mirror_by_chapter", {}).get(str(codes[a]), {})
             else:
                 matrix[a][b] = reps[a]["exports_by_partner"].get(str(codes[b]))
                 flows_by_chapter[a][b] = reps[a]["exports_to_majors_by_chapter"].get(str(codes[b]), {})
@@ -400,7 +443,7 @@ def build_trade(raw: dict, tariffs: dict | None, customs: dict | None, countries
             ex_ch, im_ch = {}, {}
             ex_p, im_p = {}, {}
             for b, r in reps.items():
-                for ch, v in r["imports_from_rus_by_chapter"].items():
+                for ch, v in r.get("imports_from_mirror_by_chapter", {}).get(str(codes[iso]), {}).items():
                     ex_ch[ch] = ex_ch.get(ch, 0) + v
                 for ch, v in r["exports_to_majors_by_chapter"].get(str(codes[iso]), {}).items():
                     im_ch[ch] = im_ch.get(ch, 0) + v
